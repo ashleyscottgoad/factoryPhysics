@@ -1,0 +1,36 @@
+# Deploys the React/Pixi client to Azure Static Web Apps.
+#
+# One-time setup (see docs/azure-setup.md):
+#   1. Create the Static Web App (choose "Other" as the deployment source so
+#      Azure does not generate a competing workflow).
+#   2. Store its deployment token as the repo secret AZURE_STATIC_WEB_APPS_API_TOKEN.
+#   3. Set VITE_API_BASE_URL below to the App Service URL.
+
+name: Deploy Client
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/client/**'
+      - '.github/workflows/deploy-client.yml'
+  workflow_dispatch:
+
+env:
+  VITE_API_BASE_URL: https://factoryphysics-api.azurewebsites.net   # TODO: set to the new App Service URL
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          app_location: src/client
+          output_location: dist
+        env:
+          VITE_API_BASE_URL: ${{ env.VITE_API_BASE_URL }}
