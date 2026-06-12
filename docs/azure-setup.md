@@ -4,6 +4,14 @@ The plan: reuse the HeatTracker hosting setup — a **new App Service** for this
 API, a **new database on the existing Azure SQL server**, and a new Static Web
 App for the client.
 
+**Deployed resources (2026-06):**
+
+| Resource | Name / URL |
+|---|---|
+| App Service (API) | `factory-physics` — https://factory-physics-ecbmgwf8ahhybtb9.eastus2-01.azurewebsites.net |
+| Static Web App (client) | https://gray-beach-04855450f.7.azurestaticapps.net |
+| Database | *(not yet created)* |
+
 ## 1. Database (existing SQL server, new database)
 
 1. In the Azure portal, open the existing SQL server used by HeatTracker.
@@ -26,7 +34,8 @@ App for the client.
    - Name: `Default`, Type: `SQLAzure`, Value: the connection string from step 1.
      (ASP.NET Core surfaces this as `ConnectionStrings:Default` automatically.)
 3. Under **Environment variables → App settings**, add the client origin for CORS:
-   - `Cors__AllowedOrigins__0` = `https://<static-web-app>.azurestaticapps.net`
+   - `Cors__AllowedOrigins__0` = `https://gray-beach-04855450f.7.azurestaticapps.net`
+   - No trailing slash — the value must match the browser's `Origin` header exactly.
 4. If using SQL auth, make sure the server firewall allows Azure services
    (it already will if HeatTracker's App Service connects the same way).
 5. Download the **publish profile** (Overview → Get publish profile) and save

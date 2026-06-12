@@ -28,10 +28,13 @@ public static class GameContent
     public static BuildingDefinition? FindBuilding(string id) =>
         Buildings.FirstOrDefault(b => b.Id == id);
 
-    /// <summary>A fresh factory: enough cash for a mine and a smelter.</summary>
+    /// <summary>
+    /// A fresh factory. Only finished goods generate revenue, so starting cash
+    /// must cover the full chain (1,600) — anything less is an economic dead end.
+    /// </summary>
     public static FactoryState NewFactory() => new()
     {
-        Cash = 250m,
+        Cash = 2000m,
         Buildings =
         {
             new BuildingInstance { DefinitionId = "ore-mine" },

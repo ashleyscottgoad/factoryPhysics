@@ -4,6 +4,15 @@ Running log of design decisions. Newest at the top. Larger context lives in
 `CLAUDE.md` (decisions log table there is the summary; this file holds the
 reasoning).
 
+## 2026-06-12 — Starting cash must cover the full chain
+
+First playtest hit an economic dead end: only finished goods (Machines)
+generate revenue, the full chain costs 1,600, and starting cash was 250 — so
+after buying a smelter the player could never earn another cent. Starting cash
+is now 2,000. Longer term, a real early game wants either a cheaper first
+revenue source or the ability to sell intermediates at a discount; revisit
+with balancing.
+
 ## 2026-06-12 — Initial skeleton
 
 **Server-authoritative idle simulation.** The backend owns the game state and

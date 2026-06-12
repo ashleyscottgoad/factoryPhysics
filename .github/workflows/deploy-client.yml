@@ -4,7 +4,8 @@
 #   1. Create the Static Web App (choose "Other" as the deployment source so
 #      Azure does not generate a competing workflow).
 #   2. Store its deployment token as the repo secret AZURE_STATIC_WEB_APPS_API_TOKEN.
-#   3. Set VITE_API_BASE_URL below to the App Service URL.
+#   3. Set VITE_API_BASE_URL below to the App Service URL (the API the client
+#      calls at runtime — NOT the Static Web App's own URL).
 
 name: Deploy Client
 
@@ -17,7 +18,7 @@ on:
   workflow_dispatch:
 
 env:
-  VITE_API_BASE_URL: https://gray-beach-04855450f.7.azurestaticapps.net
+  VITE_API_BASE_URL: https://factory-physics-ecbmgwf8ahhybtb9.eastus2-01.azurewebsites.net
 
 jobs:
   deploy:
