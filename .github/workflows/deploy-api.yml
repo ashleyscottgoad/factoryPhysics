@@ -1,0 +1,40 @@
+# Deploys the ASP.NET Core API to the Azure App Service.
+#
+# One-time setup (see docs/azure-setup.md):
+#   1. Create the App Service and set AZURE_WEBAPP_NAME below to its name.
+#   2. Download its publish profile and store it as the repo secret
+#      AZURE_WEBAPP_PUBLISH_PROFILE.
+
+name: Deploy API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/api/**'
+      - 'src/simulation/**'
+      - '.github/workflows/deploy-api.yml'
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: factoryphysics-api   # TODO: set to the new App Service name
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish
+        run: dotnet publish src/api/FactoryPhysics.Api.csproj --configuration Release --output ./publish
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ./publish
