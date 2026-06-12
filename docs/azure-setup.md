@@ -17,8 +17,9 @@ App for the client.
 1. In the Azure portal, open the existing SQL server used by HeatTracker.
 2. Create a new database, e.g. `factoryphysics` (the smallest tier is fine —
    v1 writes one save-game row about once a minute).
-3. Run `db/migrations/001_create_save_games.sql` against the new database
-   (Query editor in the portal, SSMS, or `sqlcmd`).
+3. Run the scripts in `db/migrations/` against the new database, in filename
+   order (Query editor in the portal, SSMS, or `sqlcmd`). The content tables
+   from 002 are seeded automatically by the API on first run.
 4. Note the connection string (SQL auth or, better, the same auth approach
    HeatTracker uses). It will look like:
    ```
@@ -36,11 +37,15 @@ App for the client.
 3. Under **Environment variables → App settings**, add the client origin for CORS:
    - `Cors__AllowedOrigins__0` = `https://gray-beach-04855450f.7.azurestaticapps.net`
    - No trailing slash — the value must match the browser's `Origin` header exactly.
-4. If using SQL auth, make sure the server firewall allows Azure services
+4. Also under **App settings**, set the admin page password:
+   - `AdminKey` = a secret of your choosing. The admin page (`#/admin` on the
+     client) sends it as the `X-Admin-Key` header. **Until this is set, the
+     admin endpoints are disabled in production** (they respond 503).
+5. If using SQL auth, make sure the server firewall allows Azure services
    (it already will if HeatTracker's App Service connects the same way).
-5. Download the **publish profile** (Overview → Get publish profile) and save
+6. Download the **publish profile** (Overview → Get publish profile) and save
    it as the GitHub repo secret `AZURE_WEBAPP_PUBLISH_PROFILE`.
-6. Set `AZURE_WEBAPP_NAME` in `.github/workflows/deploy-api.yml` to the new
+7. Set `AZURE_WEBAPP_NAME` in `.github/workflows/deploy-api.yml` to the new
    App Service name.
 
 ## 3. Static Web App (client)

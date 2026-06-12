@@ -4,6 +4,31 @@ Running log of design decisions. Newest at the top. Larger context lives in
 `CLAUDE.md` (decisions log table there is the summary; this file holds the
 reasoning).
 
+## 2026-06-12 — Admin page: data-driven content
+
+Recipes (inputs/outputs/cost/time) and graphics (color/shape/icon per station
+and product) are now editable at `#/admin` and stored in `Resources` /
+`BuildingDefinitions` tables; `GameContent.cs` only provides the defaults
+that seed the database on first run (and the "reset to defaults" target).
+
+Decisions that fell out of this:
+
+- **Whole-set replace, not row CRUD.** The admin saves the entire content set
+  in one PUT; the server validates referential integrity (inputs/outputs must
+  reference existing products) and swaps an immutable `ContentCatalog`
+  atomically. No FK constraints in the DB — the app is the gatekeeper.
+- **Content version.** `/api/state` carries `contentVersion`; the game client
+  refetches content when it changes, so admin edits show up mid-session.
+- **Edited recipes apply to existing buildings immediately** (next cycle).
+  Deleting a definition leaves already-built instances idle, not crashed;
+  renaming an id orphans them (warned in the admin UI).
+- **Auth is a shared key** (`AdminKey` app setting, `X-Admin-Key` header).
+  With no key configured, admin endpoints are open in Development and
+  disabled (503) in production, so an unconfigured deploy fails closed.
+- **Preview = the real renderer.** The admin preview feeds FactoryCanvas a
+  synthetic "one of everything, edges stocked" state, so what you style is
+  exactly what the factory view draws.
+
 ## 2026-06-12 — Starting cash must cover the full chain
 
 First playtest hit an economic dead end: only finished goods (Machines)

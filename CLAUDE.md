@@ -105,10 +105,10 @@ Simple enough to build quickly, complex enough to feel like a real production ch
 **Market**
 - ResourceId, CurrentDemandMultiplier, BasePrice
 
-> v1 implementation note: game content (resources, building definitions) is defined
-> in code (`src/simulation/GameContent.cs`); the database only persists save games
-> (serialized factory state). The relational model above is the target for v2 when
-> content becomes data-driven.
+> Implementation note: resources and building definitions are admin-editable
+> and stored relationally (`Resources`, `BuildingDefinitions` tables — see
+> `db/migrations/002`). `src/simulation/GameContent.cs` holds the defaults that
+> seed the database on first run. Save games remain a JSON snapshot per player.
 
 ---
 
@@ -175,6 +175,8 @@ Implementation note: Quality score should be a float (0.0–1.0) per production 
 | 2026-06 | Reuse HeatTracker hosting: new App Service, same Azure SQL server, new database | Known infrastructure, no new cost surface |
 | 2026-06 | .NET 8 LTS, game content in code, DB stores save games only | Smallest persistence surface for v1; relational content model deferred to v2 |
 | 2026-06 | Retarget to .NET 10 LTS | App Service was provisioned with the .NET 10 (Linux) stack; local SDK is 10.0.x anyway |
+| 2026-06 | Content is data-driven: admin page edits recipes + graphics, stored in Resources/BuildingDefinitions tables | The v2 relational model arrived early; code defaults seed the DB on first run |
+| 2026-06 | Admin protected by a shared key (`AdminKey` app setting → `X-Admin-Key` header) | Public URL needs at least a crude lock; real auth deferred |
 | 2026-06 | Server holds live game state in memory; periodic + on-demand save to SQL | Idle games need cheap ticks; SQL round-trip per tick is unnecessary |
 
 ---
