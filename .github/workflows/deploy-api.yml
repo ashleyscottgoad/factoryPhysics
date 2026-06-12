@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_WEBAPP_NAME: factoryphysics-api   # TODO: set to the new App Service name
+  AZURE_WEBAPP_NAME: factory-physics
 
 jobs:
   deploy:
