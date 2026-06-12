@@ -4,7 +4,10 @@ namespace FactoryPhysics.Api.Services;
 /// Drives the simulation: ticks the factory once per second and auto-saves
 /// once per minute. On startup, attempts to restore the last save.
 /// </summary>
-public sealed class TickHostedService(GameService game, ILogger<TickHostedService> logger)
+public sealed class TickHostedService(
+    GameService game,
+    ContentService content,
+    ILogger<TickHostedService> logger)
     : BackgroundService
 {
     private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(1);
@@ -12,6 +15,16 @@ public sealed class TickHostedService(GameService game, ILogger<TickHostedServic
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        try
+        {
+            // Content first: the game load and all ticks read the catalog.
+            await content.InitializeAsync(stoppingToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to load content from database; using defaults");
+        }
+
         try
         {
             var restored = await game.LoadAsync(stoppingToken);

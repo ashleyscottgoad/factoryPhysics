@@ -10,14 +10,17 @@ namespace FactoryPhysics.Api.Services;
 /// v1 is single-player: one factory under a fixed player id. State is ticked
 /// by <see cref="TickHostedService"/> and saved to SQL periodically and on demand.
 /// </summary>
-public sealed class GameService(IServiceScopeFactory scopeFactory, ILogger<GameService> logger)
+public sealed class GameService(
+    IServiceScopeFactory scopeFactory,
+    ContentService content,
+    ILogger<GameService> logger)
 {
     public const string DefaultPlayerId = "default";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly object _gate = new();
-    private FactoryState _state = GameContent.NewFactory();
+    private FactoryState _state = GameContent.NewFactory(content.Catalog);
 
     /// <summary>Run an action against the live state under the lock and return its result.</summary>
     public T WithState<T>(Func<FactoryState, T> action)
@@ -32,7 +35,7 @@ public sealed class GameService(IServiceScopeFactory scopeFactory, ILogger<GameS
     {
         lock (_gate)
         {
-            SimulationEngine.Tick(_state, deltaSeconds);
+            SimulationEngine.Tick(_state, deltaSeconds, content.Catalog);
         }
     }
 
@@ -40,7 +43,16 @@ public sealed class GameService(IServiceScopeFactory scopeFactory, ILogger<GameS
     {
         lock (_gate)
         {
-            return SimulationEngine.TryPurchaseBuilding(_state, definitionId);
+            return SimulationEngine.TryPurchaseBuilding(_state, definitionId, content.Catalog);
+        }
+    }
+
+    /// <summary>Throw away the current factory and start a new game.</summary>
+    public void ResetGame()
+    {
+        lock (_gate)
+        {
+            _state = GameContent.NewFactory(content.Catalog);
         }
     }
 

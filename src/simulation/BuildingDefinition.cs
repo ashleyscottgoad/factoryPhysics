@@ -1,9 +1,10 @@
 namespace FactoryPhysics.Simulation;
 
 /// <summary>
-/// A purchasable production building. Consumes <see cref="InputResourceId"/>
+/// A purchasable production building ("recipe"). Consumes <see cref="InputResourceId"/>
 /// (null for raw extractors like the ore mine) and produces
 /// <see cref="OutputResourceId"/> every <see cref="ProductionTimeSeconds"/>.
+/// Shape is one of "box", "rounded", "pill" (rendered by the client).
 /// </summary>
 public sealed record BuildingDefinition(
     string Id,
@@ -13,4 +14,8 @@ public sealed record BuildingDefinition(
     string OutputResourceId,
     int OutputAmount,
     double ProductionTimeSeconds,
-    decimal Cost);
+    decimal Cost,
+    string Color = "#1d2433",
+    string Shape = "box",
+    string Icon = "🏭",
+    int SortOrder = 0);

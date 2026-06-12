@@ -2,11 +2,22 @@
 
 export type ResourceTier = 0 | 1 | 2; // Raw | Intermediate | Finished
 
+export const TIER_NAMES: Record<ResourceTier, string> = {
+  0: 'Raw',
+  1: 'Intermediate',
+  2: 'Finished',
+};
+
+export type BuildingShape = 'box' | 'rounded' | 'pill';
+
 export interface ResourceDefinition {
   id: string;
   name: string;
   tier: ResourceTier;
   baseValue: number;
+  color: string;
+  icon: string;
+  sortOrder: number;
 }
 
 export interface BuildingDefinition {
@@ -18,9 +29,14 @@ export interface BuildingDefinition {
   outputAmount: number;
   productionTimeSeconds: number;
   cost: number;
+  color: string;
+  shape: BuildingShape;
+  icon: string;
+  sortOrder: number;
 }
 
 export interface GameContent {
+  version: number;
   resources: ResourceDefinition[];
   buildings: BuildingDefinition[];
 }
@@ -32,6 +48,7 @@ export interface BuildingState {
 }
 
 export interface GameState {
+  contentVersion: number;
   cash: number;
   lifetimeRevenue: number;
   elapsedSeconds: number;

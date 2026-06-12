@@ -2,7 +2,8 @@ namespace FactoryPhysics.Simulation;
 
 /// <summary>
 /// Advances a <see cref="FactoryState"/> through time. Pure logic: no I/O,
-/// no clocks — the caller decides how much time has passed.
+/// no clocks — the caller decides how much time has passed and supplies the
+/// content catalog (which an admin may have edited since the last tick).
 /// </summary>
 public static class SimulationEngine
 {
@@ -13,7 +14,7 @@ public static class SimulationEngine
     /// Buildings are processed in chain order so goods can flow through
     /// multiple steps across consecutive ticks (bottlenecks back up naturally).
     /// </summary>
-    public static void Tick(FactoryState state, double deltaSeconds)
+    public static void Tick(FactoryState state, double deltaSeconds, ContentCatalog catalog)
     {
         if (deltaSeconds <= 0)
         {
@@ -24,10 +25,10 @@ public static class SimulationEngine
 
         foreach (var building in state.Buildings)
         {
-            var def = GameContent.FindBuilding(building.DefinitionId);
+            var def = catalog.FindBuilding(building.DefinitionId);
             if (def is null)
             {
-                continue; // unknown building in an old save; skip rather than crash
+                continue; // definition deleted or renamed by an admin; idle rather than crash
             }
 
             var remaining = deltaSeconds;
@@ -58,16 +59,16 @@ public static class SimulationEngine
                     remaining -= needed;
                     building.CycleActive = false;
                     building.ProgressSeconds = 0;
-                    Produce(state, def);
+                    Produce(state, def, catalog);
                 }
             }
         }
     }
 
     /// <summary>Buy a building if the player can afford it. Returns false otherwise.</summary>
-    public static bool TryPurchaseBuilding(FactoryState state, string definitionId)
+    public static bool TryPurchaseBuilding(FactoryState state, string definitionId, ContentCatalog catalog)
     {
-        var def = GameContent.FindBuilding(definitionId);
+        var def = catalog.FindBuilding(definitionId);
         if (def is null || state.Cash < def.Cost)
         {
             return false;
@@ -94,9 +95,13 @@ public static class SimulationEngine
         return true;
     }
 
-    private static void Produce(FactoryState state, BuildingDefinition def)
+    private static void Produce(FactoryState state, BuildingDefinition def, ContentCatalog catalog)
     {
-        var resource = GameContent.GetResource(def.OutputResourceId);
+        var resource = catalog.FindResource(def.OutputResourceId);
+        if (resource is null)
+        {
+            return; // output resource deleted by an admin; drop the goods
+        }
 
         if (resource.Tier == ResourceTier.Finished)
         {
