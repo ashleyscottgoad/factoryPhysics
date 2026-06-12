@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 env:
-  VITE_API_BASE_URL: https://factory-physics-ecbmgwf8ahhybtb9.eastus2-01.azurewebsites.net
+  VITE_API_BASE_URL: https://gray-beach-04855450f.7.azurestaticapps.net
 
 jobs:
   deploy:
