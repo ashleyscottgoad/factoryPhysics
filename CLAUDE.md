@@ -22,11 +22,16 @@ An idle/simulation game inspired by *Capitalism Plus* and *Factorio*, focused on
 - Complex demand modeling
 - Multiplayer
 
-**First prototype chain:**
+**Default chains (Capitalism 2–inspired, cheap → expensive):**
 ```
-Ore → Metal → Parts → Machine
+Bakery     Wheat → Flour → Bread
+Timber     Timber → Lumber → Furniture
+Textiles   Cotton → Fabric → Apparel
+Machinery  Ore → Metal → Parts → Machine
+Petrochem  Crude Oil → Plastic → Toys
 ```
-Simple enough to build quickly, complex enough to feel like a real production chain.
+All linear for now — the engine is single-input-per-station. Multi-ingredient
+recipes (car = steel + tires) are the next engine feature.
 
 ---
 

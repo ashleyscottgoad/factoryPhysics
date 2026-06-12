@@ -1,12 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchContent, fetchState, purchaseBuilding } from './api';
+import { chainComponents, chainLabel } from './chains';
 import { FactoryCanvas } from './FactoryCanvas';
-import type { GameContent, GameState } from './types';
+import type { BuildingDefinition, GameContent, GameState, ResourceDefinition } from './types';
 
 const POLL_MS = 1000;
 
 const money = (n: number) =>
   n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+interface ChainGroup {
+  product: ResourceDefinition | undefined;
+  buildings: BuildingDefinition[];
+}
+
+function groupChains(content: GameContent): ChainGroup[] {
+  const components = chainComponents(content.buildings);
+  const resourceById = new Map(content.resources.map((r) => [r.id, r]));
+  const groups: BuildingDefinition[][] = [];
+  content.buildings.forEach((b, i) => {
+    (groups[components[i]] ??= []).push(b);
+  });
+  return groups.map((buildings) => ({
+    product: chainLabel(buildings, resourceById),
+    buildings,
+  }));
+}
 
 export function GamePage() {
   const [content, setContent] = useState<GameContent | null>(null);
@@ -68,29 +87,34 @@ export function GamePage() {
       {content && state && (
         <section className="shop">
           <h2>Build</h2>
-          <div className="shop-grid">
-            {content.buildings.map((def) => {
-              const owned = state.buildings.filter((b) => b.definitionId === def.id).length;
-              return (
-                <button
-                  key={def.id}
-                  onClick={() => buy(def.id)}
-                  disabled={state.cash < def.cost}
-                >
-                  <span className="shop-name">
-                    {def.icon} {def.name} <small>(x{owned})</small>
-                  </span>
-                  <span className="shop-detail">
-                    {def.inputResourceId
-                      ? `${def.inputAmount} ${def.inputResourceId} → ${def.outputAmount} ${def.outputResourceId}`
-                      : `→ ${def.outputAmount} ${def.outputResourceId}`}
-                    {' · '}{def.productionTimeSeconds}s
-                  </span>
-                  <span className="shop-cost">{money(def.cost)}</span>
-                </button>
-              );
-            })}
-          </div>
+          {groupChains(content).map(({ product, buildings }, g) => (
+            <div key={g} className="shop-chain">
+              <h3>{product ? `${product.icon} ${product.name}` : `Chain ${g + 1}`}</h3>
+              <div className="shop-grid">
+                {buildings.map((def) => {
+                  const owned = state.buildings.filter((b) => b.definitionId === def.id).length;
+                  return (
+                    <button
+                      key={def.id}
+                      onClick={() => buy(def.id)}
+                      disabled={state.cash < def.cost}
+                    >
+                      <span className="shop-name">
+                        {def.icon} {def.name} <small>(x{owned})</small>
+                      </span>
+                      <span className="shop-detail">
+                        {def.inputResourceId
+                          ? `${def.inputAmount} ${def.inputResourceId} → ${def.outputAmount} ${def.outputResourceId}`
+                          : `→ ${def.outputAmount} ${def.outputResourceId}`}
+                        {' · '}{def.productionTimeSeconds}s
+                      </span>
+                      <span className="shop-cost">{money(def.cost)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </section>
       )}
 

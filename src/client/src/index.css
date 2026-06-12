@@ -42,9 +42,19 @@ h2 {
   color: #4fc97e;
 }
 
+.factory-canvas {
+  overflow-x: auto;
+}
+
 .factory-canvas canvas {
   border-radius: 12px;
-  max-width: 100%;
+}
+
+.shop-chain h3 {
+  font-size: 13px;
+  margin: 18px 0 8px;
+  color: #9aa4b8;
+  font-weight: 600;
 }
 
 .shop-grid {

@@ -4,6 +4,30 @@ Running log of design decisions. Newest at the top. Larger context lives in
 `CLAUDE.md` (decisions log table there is the summary; this file holds the
 reasoning).
 
+## 2026-06-12 — Capitalism 2–inspired default chains
+
+Default content is now five parallel industries instead of one chain, ordered
+as a cost progression (full-chain price → end product value):
+
+| Chain | Flow | Entry cost | End product |
+|---|---|---|---|
+| Bakery | Wheat → Flour → Bread | ~$240 | $7 |
+| Timber | Timber → Lumber → Furniture | ~$780 | $26 |
+| Textiles | Cotton → Fabric → Apparel | ~$950 | $32 |
+| Machinery | Ore → Metal → Parts → Machine | ~$1,600 | $40 |
+| Petrochem | Crude Oil → Plastic → Toys | ~$3,100 | $120 |
+
+The bakery is the intended opener (new factories start with a wheat farm —
+`NewFactory` picks the cheapest extractor); petrochem is the reinvestment
+goal. All chains are linear because the engine is single-input-per-station;
+Capitalism's multi-ingredient recipes (car = steel + tires) need a
+multi-input engine change first — that's the natural next feature.
+
+Rendering: the factory view lays out one row per chain (connected components
+over shared resources, computed client-side in `chains.ts`), and the build
+menu groups stations by chain. Machinery building ids kept from v1 so
+existing saves keep working.
+
 ## 2026-06-12 — Admin page: data-driven content
 
 Recipes (inputs/outputs/cost/time) and graphics (color/shape/icon per station

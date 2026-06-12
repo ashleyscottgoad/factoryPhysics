@@ -1,15 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { Application, Container, Graphics, Text } from 'pixi.js';
-import type { BuildingDefinition, GameContent, GameState } from './types';
+import { chainComponents, chainLabel } from './chains';
+import type { GameContent, GameState } from './types';
 
-const HEIGHT = 340;
 const NODE_W = 160;
 const NODE_H = 96;
-const NODE_Y = 110;
 const COL_X0 = 40;
 const COL_GAP = 230; // NODE_W + edge room
+const ROW_TOP = 16;
+const ROW_LABEL_H = 26;
+const ROW_H = ROW_LABEL_H + NODE_H + 78; // label + node + edge/inventory room
 const DOTS_PER_EDGE = 4;
-const UNDER_LANE_Y = NODE_Y + NODE_H + 46;
 
 const SHAPE_RADIUS: Record<string, number> = {
   box: 3,
@@ -57,43 +58,32 @@ function pointAlong(
   return points[points.length - 1];
 }
 
-/**
- * Adjacent columns connect with a straight line; longer or backward hops
- * route under the node row (each in its own lane so they don't overlap).
- */
-function edgePath(
-  producerIndex: number,
-  consumerIndex: number,
-  underLane: number,
-): { x: number; y: number }[] {
-  const midY = NODE_Y + NODE_H / 2;
+interface NodePos {
+  x: number;
+  y: number;
+}
 
-  if (consumerIndex - producerIndex === 1) {
+/**
+ * Column-adjacent nodes in the same row connect with a straight line; longer
+ * hops route under the row (each in its own lane so they don't overlap).
+ */
+function edgePath(from: NodePos, to: NodePos, underLane: number): NodePos[] {
+  const midY = from.y + NODE_H / 2;
+
+  if (from.y === to.y && to.x - from.x === COL_GAP) {
     return [
-      { x: COL_X0 + producerIndex * COL_GAP + NODE_W, y: midY },
-      { x: COL_X0 + consumerIndex * COL_GAP, y: midY },
+      { x: from.x + NODE_W, y: midY },
+      { x: to.x, y: midY },
     ];
   }
 
-  const laneY = UNDER_LANE_Y + underLane * 16;
-  const fromCx = COL_X0 + producerIndex * COL_GAP + NODE_W / 2;
-  const toCx = COL_X0 + consumerIndex * COL_GAP + NODE_W / 2;
+  const laneY = Math.max(from.y, to.y) + NODE_H + 28 + underLane * 14;
   return [
-    { x: fromCx, y: NODE_Y + NODE_H },
-    { x: fromCx, y: laneY },
-    { x: toCx, y: laneY },
-    { x: toCx, y: NODE_Y + NODE_H },
+    { x: from.x + NODE_W / 2, y: from.y + NODE_H },
+    { x: from.x + NODE_W / 2, y: laneY },
+    { x: to.x + NODE_W / 2, y: laneY },
+    { x: to.x + NODE_W / 2, y: to.y + NODE_H },
   ];
-}
-
-/** Nearest producer of the consumer's input earlier in the chain, else any producer. */
-function findProducerIndex(buildings: BuildingDefinition[], consumerIndex: number): number {
-  const input = buildings[consumerIndex].inputResourceId;
-  if (!input) return -1;
-  for (let i = consumerIndex - 1; i >= 0; i--) {
-    if (buildings[i].outputResourceId === input) return i;
-  }
-  return buildings.findIndex((b, i) => i !== consumerIndex && b.outputResourceId === input);
 }
 
 interface Props {
@@ -103,9 +93,9 @@ interface Props {
 }
 
 /**
- * Abstract node-graph view of the production chain: one node per building
- * type styled by its admin-configured color/shape/icon, dots in each
- * product's color flowing along the edges, progress bars per node.
+ * Abstract node-graph view of the factory: one row per production chain, one
+ * node per station styled by its admin-configured color/shape/icon, dots in
+ * each product's color flowing along the edges, progress bars per node.
  */
 export function FactoryCanvas({ content, stateRef }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -114,10 +104,23 @@ export function FactoryCanvas({ content, stateRef }: Props) {
     const host = hostRef.current;
     if (!host) return;
 
-    const width = Math.max(
-      960,
-      COL_X0 * 2 + Math.max(content.buildings.length - 1, 0) * COL_GAP + NODE_W,
-    );
+    const components = chainComponents(content.buildings);
+    const rowCount = components.length ? Math.max(...components) + 1 : 0;
+
+    // Per-building grid position: row = chain, column = order within chain.
+    const colCounters = new Array<number>(rowCount).fill(0);
+    const positions: NodePos[] = content.buildings.map((_, i) => {
+      const row = components[i];
+      const col = colCounters[row]++;
+      return {
+        x: COL_X0 + col * COL_GAP,
+        y: ROW_TOP + row * ROW_H + ROW_LABEL_H,
+      };
+    });
+
+    const maxCols = Math.max(1, ...colCounters);
+    const width = Math.max(960, COL_X0 * 2 + (maxCols - 1) * COL_GAP + NODE_W);
+    const height = Math.max(340, ROW_TOP + rowCount * ROW_H);
 
     let cancelled = false;
     const app = new Application();
@@ -125,7 +128,7 @@ export function FactoryCanvas({ content, stateRef }: Props) {
     const setup = async () => {
       await app.init({
         width,
-        height: HEIGHT,
+        height,
         backgroundColor: 0x10131a,
         antialias: true,
       });
@@ -144,88 +147,118 @@ export function FactoryCanvas({ content, stateRef }: Props) {
       const edgeLayer = new Container();
       scene.addChild(edgeLayer); // edges render under the nodes
 
-      let underLane = 0;
+      // Row labels: the chain's end product.
+      for (let row = 0; row < rowCount; row++) {
+        const chain = content.buildings.filter((_, i) => components[i] === row);
+        const product = chainLabel(chain, resourceById);
+        const label = new Text({
+          text: product ? `${product.icon} ${product.name}` : `Chain ${row + 1}`,
+          style: { fill: 0x6b7689, fontSize: 13, fontWeight: '600' },
+        });
+        label.position.set(COL_X0, ROW_TOP + row * ROW_H);
+        scene.addChild(label);
+      }
+
+      const underLanes = new Array<number>(rowCount).fill(0);
+
       content.buildings.forEach((def, i) => {
-        const producerIndex = findProducerIndex(content.buildings, i);
-        if (producerIndex >= 0 && def.inputResourceId) {
-          const isAdjacent = i - producerIndex === 1;
-          const points = edgePath(producerIndex, i, isAdjacent ? 0 : underLane++);
-          const resource = resourceById.get(def.inputResourceId);
-
-          const line = new Graphics();
-          line.moveTo(points[0].x, points[0].y);
-          for (let p = 1; p < points.length; p++) {
-            line.lineTo(points[p].x, points[p].y);
+        // Edge from the nearest earlier producer of this building's input.
+        if (def.inputResourceId) {
+          let producerIndex = -1;
+          for (let p = i - 1; p >= 0; p--) {
+            if (content.buildings[p].outputResourceId === def.inputResourceId) {
+              producerIndex = p;
+              break;
+            }
           }
-          line.stroke({ width: 2, color: 0x2e374a });
-          edgeLayer.addChild(line);
-
-          const segmentLengths = points.slice(1).map((b, s) =>
-            Math.hypot(b.x - points[s].x, b.y - points[s].y));
-          const totalLength = segmentLengths.reduce((a, b) => a + b, 0);
-
-          const labelPoint = pointAlong(points, segmentLengths, totalLength, 0.5);
-          const inventoryLabel = new Text({
-            text: '',
-            style: { fill: 0x9aa4b8, fontSize: 12 },
-          });
-          inventoryLabel.anchor.set(0.5, 0);
-          inventoryLabel.position.set(labelPoint.x, labelPoint.y + 8);
-          scene.addChild(inventoryLabel);
-
-          const dotColor = hexToNum(resource?.color ?? '', 0xf0b35c);
-          const dots: Graphics[] = [];
-          for (let d = 0; d < DOTS_PER_EDGE; d++) {
-            const dot = new Graphics().circle(0, 0, 4).fill(dotColor);
-            dot.visible = false;
-            edgeLayer.addChild(dot);
-            dots.push(dot);
+          if (producerIndex < 0) {
+            producerIndex = content.buildings.findIndex(
+              (b, idx) => idx !== i && b.outputResourceId === def.inputResourceId,
+            );
           }
 
-          edges.push({
-            resourceId: def.inputResourceId,
-            dots,
-            points,
-            segmentLengths,
-            totalLength,
-            inventoryLabel,
-          });
+          if (producerIndex >= 0) {
+            const from = positions[producerIndex];
+            const to = positions[i];
+            const isStraight = from.y === to.y && to.x - from.x === COL_GAP;
+            const points = edgePath(from, to, isStraight ? 0 : underLanes[components[i]]++);
+            const resource = resourceById.get(def.inputResourceId);
+
+            const line = new Graphics();
+            line.moveTo(points[0].x, points[0].y);
+            for (let p = 1; p < points.length; p++) {
+              line.lineTo(points[p].x, points[p].y);
+            }
+            line.stroke({ width: 2, color: 0x2e374a });
+            edgeLayer.addChild(line);
+
+            const segmentLengths = points.slice(1).map((b, s) =>
+              Math.hypot(b.x - points[s].x, b.y - points[s].y));
+            const totalLength = segmentLengths.reduce((a, b) => a + b, 0);
+
+            const labelPoint = pointAlong(points, segmentLengths, totalLength, 0.5);
+            const inventoryLabel = new Text({
+              text: '',
+              style: { fill: 0x9aa4b8, fontSize: 12 },
+            });
+            inventoryLabel.anchor.set(0.5, 0);
+            inventoryLabel.position.set(labelPoint.x, labelPoint.y + 8);
+            scene.addChild(inventoryLabel);
+
+            const dotColor = hexToNum(resource?.color ?? '', 0xf0b35c);
+            const dots: Graphics[] = [];
+            for (let d = 0; d < DOTS_PER_EDGE; d++) {
+              const dot = new Graphics().circle(0, 0, 4).fill(dotColor);
+              dot.visible = false;
+              edgeLayer.addChild(dot);
+              dots.push(dot);
+            }
+
+            edges.push({
+              resourceId: def.inputResourceId,
+              dots,
+              points,
+              segmentLengths,
+              totalLength,
+              inventoryLabel,
+            });
+          }
         }
 
-        const x = COL_X0 + i * COL_GAP;
+        const { x, y } = positions[i];
         const radius = SHAPE_RADIUS[def.shape] ?? SHAPE_RADIUS.box;
 
         const box = new Graphics()
           .roundRect(0, 0, NODE_W, NODE_H, radius)
           .fill(hexToNum(def.color))
           .stroke({ width: 2, color: 0x3e4a61 });
-        box.position.set(x, NODE_Y);
+        box.position.set(x, y);
         scene.addChild(box);
 
         const icon = new Text({ text: def.icon, style: { fontSize: 22 } });
         icon.anchor.set(1, 0);
-        icon.position.set(x + NODE_W - 10, NODE_Y + 8);
+        icon.position.set(x + NODE_W - 10, y + 8);
         scene.addChild(icon);
 
         const name = new Text({
           text: def.name,
           style: { fill: 0xe8eaf0, fontSize: 15, fontWeight: '600' },
         });
-        name.position.set(x + 14, NODE_Y + 12);
+        name.position.set(x + 14, y + 12);
         scene.addChild(name);
 
         const countLabel = new Text({
           text: 'x0',
           style: { fill: 0xc8cfdc, fontSize: 13 },
         });
-        countLabel.position.set(x + 14, NODE_Y + 36);
+        countLabel.position.set(x + 14, y + 36);
         scene.addChild(countLabel);
 
         const progressBg = new Graphics()
           .roundRect(0, 0, NODE_W - 28, 8, 4)
           .fill(0x10131a);
         progressBg.alpha = 0.55;
-        progressBg.position.set(x + 14, NODE_Y + NODE_H - 22);
+        progressBg.position.set(x + 14, y + NODE_H - 22);
         scene.addChild(progressBg);
 
         const outputColor = hexToNum(
@@ -233,7 +266,7 @@ export function FactoryCanvas({ content, stateRef }: Props) {
           0x4fc97e,
         );
         const progressFill = new Graphics().rect(0, 0, 1, 8).fill(outputColor);
-        progressFill.position.set(x + 14, NODE_Y + NODE_H - 22);
+        progressFill.position.set(x + 14, y + NODE_H - 22);
         progressFill.scale.x = 0;
         scene.addChild(progressFill);
 
