@@ -20,7 +20,7 @@ App for the client.
 ## 2. App Service (API)
 
 1. Create a new App Service:
-   - Runtime stack: **.NET 8 (LTS)**, Linux or Windows to match HeatTracker.
+   - Runtime stack: **.NET 10 (LTS)** on Linux *(done — created 2026-06)*.
    - Reuse the existing App Service Plan if it has headroom (no extra cost).
 2. Under **Settings → Environment variables → Connection strings**, add:
    - Name: `Default`, Type: `SQLAzure`, Value: the connection string from step 1.
