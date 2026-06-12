@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_WEBAPP_NAME: factoryphysics-api   # TODO: set to the new App Service name
+  AZURE_WEBAPP_NAME: factory-physics
 
 jobs:
   deploy:
@@ -27,7 +27,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
 
       - name: Publish
         run: dotnet publish src/api/FactoryPhysics.Api.csproj --configuration Release --output ./publish

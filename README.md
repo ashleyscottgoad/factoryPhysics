@@ -7,7 +7,7 @@ full project context and `docs/design-notes.md` for design decisions.
 
 ## Stack
 
-- **API** — ASP.NET Core (.NET 8) minimal API; runs the simulation server-side
+- **API** — ASP.NET Core (.NET 10) minimal API; runs the simulation server-side
   (`src/api`, `src/simulation`)
 - **Client** — React + TypeScript + Pixi.js via Vite (`src/client`)
 - **Database** — Azure SQL (save games); plain SQL migrations in `db/migrations`

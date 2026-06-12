@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 env:
-  VITE_API_BASE_URL: https://factoryphysics-api.azurewebsites.net   # TODO: set to the new App Service URL
+  VITE_API_BASE_URL: https://factory-physics-ecbmgwf8ahhybtb9.eastus2-01.azurewebsites.net
 
 jobs:
   deploy:

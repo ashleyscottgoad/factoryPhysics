@@ -34,7 +34,7 @@ Simple enough to build quickly, complex enough to feel like a real production ch
 
 | Layer | Technology | Notes |
 |---|---|---|
-| Backend | ASP.NET Core (C#, .NET 8) | Existing experience, Azure-native |
+| Backend | ASP.NET Core (C#, .NET 10) | Existing experience, Azure-native |
 | Frontend | TypeScript + React (Vite) | UI shell and app structure |
 | Rendering | Pixi.js | Canvas-based game/simulation visuals |
 | Database | Azure SQL | Production chain state, save data |
@@ -174,6 +174,7 @@ Implementation note: Quality score should be a float (0.0–1.0) per production 
 | 2026-06 | First chain: Ore → Metal → Parts → Machine | Simple 3-step chain; enough to validate the loop |
 | 2026-06 | Reuse HeatTracker hosting: new App Service, same Azure SQL server, new database | Known infrastructure, no new cost surface |
 | 2026-06 | .NET 8 LTS, game content in code, DB stores save games only | Smallest persistence surface for v1; relational content model deferred to v2 |
+| 2026-06 | Retarget to .NET 10 LTS | App Service was provisioned with the .NET 10 (Linux) stack; local SDK is 10.0.x anyway |
 | 2026-06 | Server holds live game state in memory; periodic + on-demand save to SQL | Idle games need cheap ticks; SQL round-trip per tick is unnecessary |
 
 ---
