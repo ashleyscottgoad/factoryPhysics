@@ -130,16 +130,26 @@ public sealed class ContentService(IServiceScopeFactory scopeFactory, ILogger<Co
                 errors.Add($"Duplicate building id \"{b.Id}\".");
             }
 
-            if (b.InputResourceId is not null)
+            var inputIds = new HashSet<string>();
+            foreach (var input in b.Inputs)
             {
-                if (!resourceIds.Contains(b.InputResourceId))
+                if (!resourceIds.Contains(input.ResourceId))
                 {
-                    errors.Add($"Building \"{label}\": input resource \"{b.InputResourceId}\" does not exist.");
+                    errors.Add($"Building \"{label}\": input resource \"{input.ResourceId}\" does not exist.");
+                }
+                else if (!inputIds.Add(input.ResourceId))
+                {
+                    errors.Add($"Building \"{label}\": resource \"{input.ResourceId}\" is listed as an input twice.");
                 }
 
-                if (b.InputAmount < 1)
+                if (input.Amount < 1)
                 {
-                    errors.Add($"Building \"{label}\": input amount must be at least 1.");
+                    errors.Add($"Building \"{label}\": input amounts must be at least 1.");
+                }
+
+                if (input.ResourceId == b.OutputResourceId)
+                {
+                    errors.Add($"Building \"{label}\": cannot consume its own output.");
                 }
             }
 

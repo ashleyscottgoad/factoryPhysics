@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FactoryPhysics.Simulation;
 
 namespace FactoryPhysics.Api.Data;
@@ -34,10 +35,14 @@ public sealed class ResourceEntity
 
 public sealed class BuildingDefinitionEntity
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     public string BuildingId { get; set; } = "";
     public string Name { get; set; } = "";
-    public string? InputResourceId { get; set; }
-    public int InputAmount { get; set; }
+
+    /// <summary>Recipe ingredients as a JSON array of {resourceId, amount}; "[]" = extractor.</summary>
+    public string InputsJson { get; set; } = "[]";
+
     public string OutputResourceId { get; set; } = "";
     public int OutputAmount { get; set; }
     public double ProductionTimeSeconds { get; set; }
@@ -48,15 +53,16 @@ public sealed class BuildingDefinitionEntity
     public int SortOrder { get; set; }
 
     public BuildingDefinition ToDefinition() =>
-        new(BuildingId, Name, InputResourceId, InputAmount, OutputResourceId, OutputAmount,
+        new(BuildingId, Name,
+            JsonSerializer.Deserialize<List<RecipeInput>>(InputsJson, JsonOptions),
+            OutputResourceId, OutputAmount,
             ProductionTimeSeconds, Cost, Color, Shape, Icon, SortOrder);
 
     public static BuildingDefinitionEntity From(BuildingDefinition d) => new()
     {
         BuildingId = d.Id,
         Name = d.Name,
-        InputResourceId = d.InputResourceId,
-        InputAmount = d.InputAmount,
+        InputsJson = JsonSerializer.Serialize(d.Inputs, JsonOptions),
         OutputResourceId = d.OutputResourceId,
         OutputAmount = d.OutputAmount,
         ProductionTimeSeconds = d.ProductionTimeSeconds,

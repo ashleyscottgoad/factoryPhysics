@@ -6,6 +6,7 @@ import type {
   BuildingShape,
   GameContent,
   GameState,
+  RecipeInput,
   ResourceDefinition,
   ResourceTier,
 } from './types';
@@ -25,7 +26,9 @@ function move<T>(arr: T[], index: number, delta: number): T[] {
 function makePreviewState(content: GameContent): GameState {
   const inventory: Record<string, number> = {};
   for (const b of content.buildings) {
-    if (b.inputResourceId) inventory[b.inputResourceId] = b.inputAmount * 3;
+    for (const inp of b.inputs) {
+      inventory[inp.resourceId] = Math.max(inventory[inp.resourceId] ?? 0, inp.amount * 3);
+    }
   }
   return {
     contentVersion: content.version,
@@ -84,6 +87,33 @@ export function AdminPage() {
   const patchBuilding = (i: number, patch: Partial<BuildingDefinition>) =>
     setBuildings((bs) => bs.map((b, idx) => (idx === i ? { ...b, ...patch } : b)));
 
+  const patchInput = (i: number, j: number, patch: Partial<RecipeInput>) =>
+    setBuildings((bs) => bs.map((b, idx) => (idx === i
+      ? { ...b, inputs: b.inputs.map((inp, k) => (k === j ? { ...inp, ...patch } : inp)) }
+      : b)));
+
+  const addInput = (i: number) =>
+    setBuildings((bs) => bs.map((b, idx) => (idx === i
+      ? {
+          ...b,
+          inputs: [
+            ...b.inputs,
+            // Default to the first resource this recipe doesn't use yet.
+            {
+              resourceId:
+                resources.find((r) => !b.inputs.some((inp) => inp.resourceId === r.id))?.id
+                ?? resources[0]?.id ?? '',
+              amount: 1,
+            },
+          ],
+        }
+      : b)));
+
+  const removeInput = (i: number, j: number) =>
+    setBuildings((bs) => bs.map((b, idx) => (idx === i
+      ? { ...b, inputs: b.inputs.filter((_, k) => k !== j) }
+      : b)));
+
   const addResource = () =>
     setResources((rs) => [
       ...rs,
@@ -104,8 +134,7 @@ export function AdminPage() {
       {
         id: `building-${bs.length + 1}`,
         name: 'New Building',
-        inputResourceId: resources[0]?.id ?? null,
-        inputAmount: 1,
+        inputs: resources[0] ? [{ resourceId: resources[0].id, amount: 1 }] : [],
         outputResourceId: resources[resources.length - 1]?.id ?? '',
         outputAmount: 1,
         productionTimeSeconds: 5,
@@ -242,17 +271,21 @@ export function AdminPage() {
                 <td><input className="id-input" value={b.id}
                   onChange={(e) => patchBuilding(i, { id: e.target.value })} /></td>
                 <td className="recipe-cell">
-                  <select value={b.inputResourceId ?? ''}
-                    onChange={(e) => patchBuilding(i, { inputResourceId: e.target.value || null })}>
-                    <option value="">(none — extractor)</option>
-                    {resources.map((r) => (
-                      <option key={r.id} value={r.id}>{r.name}</option>
-                    ))}
-                  </select>
-                  {b.inputResourceId && (
-                    <input type="number" min="1" className="num-input" value={b.inputAmount}
-                      onChange={(e) => patchBuilding(i, { inputAmount: Number(e.target.value) || 1 })} />
-                  )}
+                  {b.inputs.length === 0 && <span className="hint">(none — extractor)</span>}
+                  {b.inputs.map((inp, j) => (
+                    <div key={j} className="recipe-input-row">
+                      <select value={inp.resourceId}
+                        onChange={(e) => patchInput(i, j, { resourceId: e.target.value })}>
+                        {resources.map((r) => (
+                          <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
+                      </select>
+                      <input type="number" min="1" className="num-input" value={inp.amount}
+                        onChange={(e) => patchInput(i, j, { amount: Number(e.target.value) || 1 })} />
+                      <button className="danger" onClick={() => removeInput(i, j)}>✕</button>
+                    </div>
+                  ))}
+                  <button className="add-input" onClick={() => addInput(i)}>+ input</button>
                 </td>
                 <td className="recipe-cell">
                   <select value={b.outputResourceId}

@@ -103,8 +103,10 @@ export function GamePage() {
                         {def.icon} {def.name} <small>(x{owned})</small>
                       </span>
                       <span className="shop-detail">
-                        {def.inputResourceId
-                          ? `${def.inputAmount} ${def.inputResourceId} → ${def.outputAmount} ${def.outputResourceId}`
+                        {def.inputs.length
+                          ? `${def.inputs
+                              .map((inp) => `${inp.amount} ${inp.resourceId}`)
+                              .join(' + ')} → ${def.outputAmount} ${def.outputResourceId}`
                           : `→ ${def.outputAmount} ${def.outputResourceId}`}
                         {' · '}{def.productionTimeSeconds}s
                       </span>

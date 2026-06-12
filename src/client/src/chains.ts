@@ -21,7 +21,7 @@ export function chainComponents(buildings: BuildingDefinition[]): number[] {
 
   const firstTouching = new Map<string, number>();
   buildings.forEach((b, i) => {
-    for (const r of [b.inputResourceId, b.outputResourceId]) {
+    for (const r of [...b.inputs.map((inp) => inp.resourceId), b.outputResourceId]) {
       if (!r) continue;
       const prev = firstTouching.get(r);
       if (prev === undefined) {

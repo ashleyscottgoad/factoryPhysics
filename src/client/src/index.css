@@ -213,6 +213,18 @@ nav a.active {
   margin-left: 4px;
 }
 
+.recipe-input-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.recipe-cell .add-input {
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
 .reorder {
   white-space: nowrap;
 }

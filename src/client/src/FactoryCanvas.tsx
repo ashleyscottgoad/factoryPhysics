@@ -162,18 +162,18 @@ export function FactoryCanvas({ content, stateRef }: Props) {
       const underLanes = new Array<number>(rowCount).fill(0);
 
       content.buildings.forEach((def, i) => {
-        // Edge from the nearest earlier producer of this building's input.
-        if (def.inputResourceId) {
+        // One edge per ingredient, from the nearest earlier producer of it.
+        for (const input of def.inputs) {
           let producerIndex = -1;
           for (let p = i - 1; p >= 0; p--) {
-            if (content.buildings[p].outputResourceId === def.inputResourceId) {
+            if (content.buildings[p].outputResourceId === input.resourceId) {
               producerIndex = p;
               break;
             }
           }
           if (producerIndex < 0) {
             producerIndex = content.buildings.findIndex(
-              (b, idx) => idx !== i && b.outputResourceId === def.inputResourceId,
+              (b, idx) => idx !== i && b.outputResourceId === input.resourceId,
             );
           }
 
@@ -182,7 +182,7 @@ export function FactoryCanvas({ content, stateRef }: Props) {
             const to = positions[i];
             const isStraight = from.y === to.y && to.x - from.x === COL_GAP;
             const points = edgePath(from, to, isStraight ? 0 : underLanes[components[i]]++);
-            const resource = resourceById.get(def.inputResourceId);
+            const resource = resourceById.get(input.resourceId);
 
             const line = new Graphics();
             line.moveTo(points[0].x, points[0].y);
@@ -215,7 +215,7 @@ export function FactoryCanvas({ content, stateRef }: Props) {
             }
 
             edges.push({
-              resourceId: def.inputResourceId,
+              resourceId: input.resourceId,
               dots,
               points,
               segmentLengths,

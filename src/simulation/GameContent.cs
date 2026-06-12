@@ -10,6 +10,10 @@ namespace FactoryPhysics.Simulation;
 ///   Machinery  Ore → Metal → Parts → Machine
 ///   Petrochem  Crude Oil → Plastic → Toys       (endgame; full chain ~$3,100)
 ///
+/// plus one multi-ingredient capstone that joins two chains:
+///
+///   Automotive Metal + Parts + Plastic → Car    (requires machinery + petrochem)
+///
 /// Used to seed the database on first run and as the fallback when no
 /// database is configured. Admins can edit content at runtime; "reset to
 /// defaults" restores this catalog.
@@ -40,30 +44,36 @@ public static class GameContent
             new ResourceDefinition("crude-oil", "Crude Oil", ResourceTier.Raw,          3m,   Color: "#4a4a52", Icon: "🛢️", SortOrder: 13),
             new ResourceDefinition("plastic",   "Plastic",   ResourceTier.Intermediate, 10m,  Color: "#d977a8", Icon: "🧴", SortOrder: 14),
             new ResourceDefinition("toys",      "Toys",      ResourceTier.Finished,     120m, Color: "#e0533f", Icon: "🧸", SortOrder: 15),
+            // Automotive (multi-ingredient capstone)
+            new ResourceDefinition("car",       "Car",       ResourceTier.Finished,     320m, Color: "#d35454", Icon: "🚗", SortOrder: 16),
         },
         new[]
         {
             // Bakery — starter chain, cheap and quick
-            new BuildingDefinition("wheat-farm",        "Wheat Farm",       null,        0, "wheat",     1, ProductionTimeSeconds: 2,  Cost: 30m,   Color: "#55602b", Shape: "box",     Icon: "🚜", SortOrder: 0),
-            new BuildingDefinition("grain-mill",        "Grain Mill",       "wheat",     2, "flour",     1, ProductionTimeSeconds: 3,  Cost: 60m,   Color: "#76683f", Shape: "rounded", Icon: "🌀", SortOrder: 1),
-            new BuildingDefinition("bakery",            "Bakery",           "flour",     2, "bread",     1, ProductionTimeSeconds: 4,  Cost: 150m,  Color: "#8b5a2b", Shape: "pill",    Icon: "🥖", SortOrder: 2),
+            new BuildingDefinition("wheat-farm",        "Wheat Farm",       [],                            "wheat",     1, ProductionTimeSeconds: 2,  Cost: 30m,   Color: "#55602b", Shape: "box",     Icon: "🚜", SortOrder: 0),
+            new BuildingDefinition("grain-mill",        "Grain Mill",       [new("wheat", 2)],             "flour",     1, ProductionTimeSeconds: 3,  Cost: 60m,   Color: "#76683f", Shape: "rounded", Icon: "🌀", SortOrder: 1),
+            new BuildingDefinition("bakery",            "Bakery",           [new("flour", 2)],             "bread",     1, ProductionTimeSeconds: 4,  Cost: 150m,  Color: "#8b5a2b", Shape: "pill",    Icon: "🥖", SortOrder: 2),
             // Timber
-            new BuildingDefinition("logging-camp",      "Logging Camp",     null,        0, "timber",    1, ProductionTimeSeconds: 3,  Cost: 80m,   Color: "#3f4d2e", Shape: "box",     Icon: "🪓", SortOrder: 3),
-            new BuildingDefinition("sawmill",           "Sawmill",          "timber",    2, "lumber",    1, ProductionTimeSeconds: 4,  Cost: 200m,  Color: "#5d4a33", Shape: "rounded", Icon: "⚒️", SortOrder: 4),
-            new BuildingDefinition("furniture-factory", "Furniture Factory", "lumber",   2, "furniture", 1, ProductionTimeSeconds: 7,  Cost: 500m,  Color: "#6e4e23", Shape: "pill",    Icon: "🛋️", SortOrder: 5),
+            new BuildingDefinition("logging-camp",      "Logging Camp",     [],                            "timber",    1, ProductionTimeSeconds: 3,  Cost: 80m,   Color: "#3f4d2e", Shape: "box",     Icon: "🪓", SortOrder: 3),
+            new BuildingDefinition("sawmill",           "Sawmill",          [new("timber", 2)],            "lumber",    1, ProductionTimeSeconds: 4,  Cost: 200m,  Color: "#5d4a33", Shape: "rounded", Icon: "⚒️", SortOrder: 4),
+            new BuildingDefinition("furniture-factory", "Furniture Factory", [new("lumber", 2)],           "furniture", 1, ProductionTimeSeconds: 7,  Cost: 500m,  Color: "#6e4e23", Shape: "pill",    Icon: "🛋️", SortOrder: 5),
             // Textiles
-            new BuildingDefinition("cotton-farm",       "Cotton Farm",      null,        0, "cotton",    1, ProductionTimeSeconds: 3,  Cost: 100m,  Color: "#4a5d3a", Shape: "box",     Icon: "🌱", SortOrder: 6),
-            new BuildingDefinition("textile-mill",      "Textile Mill",     "cotton",    2, "fabric",    1, ProductionTimeSeconds: 5,  Cost: 250m,  Color: "#4b3f63", Shape: "rounded", Icon: "🧶", SortOrder: 7),
-            new BuildingDefinition("apparel-factory",   "Apparel Factory",  "fabric",    2, "apparel",   1, ProductionTimeSeconds: 7,  Cost: 600m,  Color: "#2d4a73", Shape: "pill",    Icon: "👗", SortOrder: 8),
+            new BuildingDefinition("cotton-farm",       "Cotton Farm",      [],                            "cotton",    1, ProductionTimeSeconds: 3,  Cost: 100m,  Color: "#4a5d3a", Shape: "box",     Icon: "🌱", SortOrder: 6),
+            new BuildingDefinition("textile-mill",      "Textile Mill",     [new("cotton", 2)],            "fabric",    1, ProductionTimeSeconds: 5,  Cost: 250m,  Color: "#4b3f63", Shape: "rounded", Icon: "🧶", SortOrder: 7),
+            new BuildingDefinition("apparel-factory",   "Apparel Factory",  [new("fabric", 2)],            "apparel",   1, ProductionTimeSeconds: 7,  Cost: 600m,  Color: "#2d4a73", Shape: "pill",    Icon: "👗", SortOrder: 8),
             // Machinery (ids unchanged from the original chain so old saves keep working)
-            new BuildingDefinition("ore-mine",          "Ore Mine",         null,        0, "ore",       1, ProductionTimeSeconds: 2,  Cost: 50m,   Color: "#4e342e", Shape: "box",     Icon: "⛏️", SortOrder: 9),
-            new BuildingDefinition("smelter",           "Smelter",          "ore",       2, "metal",     1, ProductionTimeSeconds: 4,  Cost: 150m,  Color: "#7c3a1d", Shape: "rounded", Icon: "🔥", SortOrder: 10),
-            new BuildingDefinition("workshop",          "Parts Workshop",   "metal",     2, "parts",     1, ProductionTimeSeconds: 6,  Cost: 400m,  Color: "#1f4e79", Shape: "box",     Icon: "🔧", SortOrder: 11),
-            new BuildingDefinition("assembly",          "Assembly Line",    "parts",     3, "machine",   1, ProductionTimeSeconds: 10, Cost: 1000m, Color: "#2f7d4f", Shape: "pill",    Icon: "🏭", SortOrder: 12),
+            new BuildingDefinition("ore-mine",          "Ore Mine",         [],                            "ore",       1, ProductionTimeSeconds: 2,  Cost: 50m,   Color: "#4e342e", Shape: "box",     Icon: "⛏️", SortOrder: 9),
+            new BuildingDefinition("smelter",           "Smelter",          [new("ore", 2)],               "metal",     1, ProductionTimeSeconds: 4,  Cost: 150m,  Color: "#7c3a1d", Shape: "rounded", Icon: "🔥", SortOrder: 10),
+            new BuildingDefinition("workshop",          "Parts Workshop",   [new("metal", 2)],             "parts",     1, ProductionTimeSeconds: 6,  Cost: 400m,  Color: "#1f4e79", Shape: "box",     Icon: "🔧", SortOrder: 11),
+            new BuildingDefinition("assembly",          "Assembly Line",    [new("parts", 3)],             "machine",   1, ProductionTimeSeconds: 10, Cost: 1000m, Color: "#2f7d4f", Shape: "pill",    Icon: "🏭", SortOrder: 12),
             // Petrochem — endgame margins
-            new BuildingDefinition("oil-well",          "Oil Well",         null,        0, "crude-oil", 1, ProductionTimeSeconds: 4,  Cost: 400m,  Color: "#26262e", Shape: "box",     Icon: "🏗️", SortOrder: 13),
-            new BuildingDefinition("refinery",          "Refinery",         "crude-oil", 2, "plastic",   1, ProductionTimeSeconds: 6,  Cost: 900m,  Color: "#3a2f3f", Shape: "rounded", Icon: "⚗️", SortOrder: 14),
-            new BuildingDefinition("toy-factory",       "Toy Factory",      "plastic",   3, "toys",      1, ProductionTimeSeconds: 12, Cost: 1800m, Color: "#6e2639", Shape: "pill",    Icon: "🧸", SortOrder: 15),
+            new BuildingDefinition("oil-well",          "Oil Well",         [],                            "crude-oil", 1, ProductionTimeSeconds: 4,  Cost: 400m,  Color: "#26262e", Shape: "box",     Icon: "🏗️", SortOrder: 13),
+            new BuildingDefinition("refinery",          "Refinery",         [new("crude-oil", 2)],         "plastic",   1, ProductionTimeSeconds: 6,  Cost: 900m,  Color: "#3a2f3f", Shape: "rounded", Icon: "⚗️", SortOrder: 14),
+            new BuildingDefinition("toy-factory",       "Toy Factory",      [new("plastic", 3)],           "toys",      1, ProductionTimeSeconds: 12, Cost: 1800m, Color: "#6e2639", Shape: "pill",    Icon: "🧸", SortOrder: 15),
+            // Automotive — multi-ingredient: pulls from machinery AND petrochem
+            new BuildingDefinition("car-plant",         "Car Plant",
+                [new("metal", 2), new("parts", 3), new("plastic", 2)],
+                                                                            "car",       1, ProductionTimeSeconds: 15, Cost: 2500m, Color: "#5a2a2a", Shape: "pill",    Icon: "🚗", SortOrder: 16),
         });
 
     /// <summary>
@@ -77,7 +87,7 @@ public static class GameContent
         var state = new FactoryState { Cash = 2000m };
 
         var extractor = catalog.Buildings
-            .Where(b => b.InputResourceId is null)
+            .Where(b => b.Inputs.Count == 0)
             .OrderBy(b => b.Cost)
             .FirstOrDefault();
         if (extractor is not null)

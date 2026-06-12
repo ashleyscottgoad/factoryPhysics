@@ -20,11 +20,16 @@ export interface ResourceDefinition {
   sortOrder: number;
 }
 
+export interface RecipeInput {
+  resourceId: string;
+  amount: number;
+}
+
 export interface BuildingDefinition {
   id: string;
   name: string;
-  inputResourceId: string | null;
-  inputAmount: number;
+  /** Empty = raw extractor. */
+  inputs: RecipeInput[];
   outputResourceId: string;
   outputAmount: number;
   productionTimeSeconds: number;

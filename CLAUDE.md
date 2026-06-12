@@ -29,9 +29,11 @@ Timber     Timber → Lumber → Furniture
 Textiles   Cotton → Fabric → Apparel
 Machinery  Ore → Metal → Parts → Machine
 Petrochem  Crude Oil → Plastic → Toys
+Automotive Metal + Parts + Plastic → Car   (multi-ingredient capstone)
 ```
-All linear for now — the engine is single-input-per-station. Multi-ingredient
-recipes (car = steel + tires) are the next engine feature.
+The engine supports multi-ingredient recipes (a station consumes a list of
+inputs, all-or-nothing per cycle). The Car Plant is the showcase: it joins the
+machinery and petrochem chains into one production network.
 
 ---
 
@@ -180,6 +182,7 @@ Implementation note: Quality score should be a float (0.0–1.0) per production 
 | 2026-06 | Reuse HeatTracker hosting: new App Service, same Azure SQL server, new database | Known infrastructure, no new cost surface |
 | 2026-06 | .NET 8 LTS, game content in code, DB stores save games only | Smallest persistence surface for v1; relational content model deferred to v2 |
 | 2026-06 | Retarget to .NET 10 LTS | App Service was provisioned with the .NET 10 (Linux) stack; local SDK is 10.0.x anyway |
+| 2026-06 | Multi-ingredient recipes: inputs are a list, consumed all-or-nothing per cycle | Unlocks Capitalism-style converging chains (car = metal + parts + plastic); stored as JSON in `BuildingDefinitions.InputsJson` |
 | 2026-06 | Content is data-driven: admin page edits recipes + graphics, stored in Resources/BuildingDefinitions tables | The v2 relational model arrived early; code defaults seed the DB on first run |
 | 2026-06 | Admin protected by a shared key (`AdminKey` app setting → `X-Admin-Key` header) | Public URL needs at least a crude lock; real auth deferred |
 | 2026-06 | Server holds live game state in memory; periodic + on-demand save to SQL | Idle games need cheap ticks; SQL round-trip per tick is unnecessary |

@@ -38,7 +38,7 @@ public sealed class FactoryDbContext(DbContextOptions<FactoryDbContext> options)
             entity.HasKey(b => b.BuildingId);
             entity.Property(b => b.BuildingId).HasMaxLength(64);
             entity.Property(b => b.Name).HasMaxLength(128);
-            entity.Property(b => b.InputResourceId).HasMaxLength(64);
+            entity.Property(b => b.InputsJson).IsRequired();
             entity.Property(b => b.OutputResourceId).HasMaxLength(64);
             entity.Property(b => b.Cost).HasPrecision(18, 2);
             entity.Property(b => b.Color).HasMaxLength(16);

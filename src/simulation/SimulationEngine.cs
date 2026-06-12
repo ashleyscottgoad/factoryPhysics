@@ -81,17 +81,20 @@ public static class SimulationEngine
 
     private static bool TryConsumeInputs(FactoryState state, BuildingDefinition def)
     {
-        if (def.InputResourceId is null)
+        // All-or-nothing: a cycle starts only when every ingredient is on hand.
+        foreach (var input in def.Inputs)
         {
-            return true; // raw extractor
+            if (state.Inventory.GetValueOrDefault(input.ResourceId) < input.Amount)
+            {
+                return false;
+            }
         }
 
-        if (state.Inventory.GetValueOrDefault(def.InputResourceId) < def.InputAmount)
+        foreach (var input in def.Inputs)
         {
-            return false;
+            state.Inventory[input.ResourceId] -= input.Amount;
         }
 
-        state.Inventory[def.InputResourceId] -= def.InputAmount;
         return true;
     }
 

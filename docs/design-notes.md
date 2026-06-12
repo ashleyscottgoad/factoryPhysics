@@ -4,6 +4,30 @@ Running log of design decisions. Newest at the top. Larger context lives in
 `CLAUDE.md` (decisions log table there is the summary; this file holds the
 reasoning).
 
+## 2026-06-12 — Multi-ingredient recipes
+
+A station's recipe is now a list of inputs (`RecipeInput[]`, empty = raw
+extractor) instead of a single resource + amount. Decisions:
+
+- **All-or-nothing consumption.** A cycle starts only when *every* ingredient
+  is on hand, then consumes them together. No partial reservations — simpler,
+  and starvation on any one input stalling the station is exactly the
+  bottleneck gameplay we want. The starved ingredient is visible in the
+  factory view (its edge runs dry first).
+- **Storage is JSON** (`BuildingDefinitions.InputsJson`, migration 003), not a
+  child table. The whole content set is already replaced atomically and
+  validated by the app, so a relational ingredient table buys nothing yet;
+  revisit if content ever needs SQL-side querying by ingredient.
+- **Showcase: the Car Plant** (2 metal + 3 parts + 2 plastic → $320 car, $2,500).
+  Deliberately bridges machinery and petrochem so the two chains render as one
+  network row — converging chains are the point of the feature. Input value is
+  ~$64/cycle against $320 out, but it needs two upstream chains running, which
+  is the real cost.
+- **Validation additions:** duplicate ingredients and self-consuming recipes
+  (input = output) are rejected on admin save.
+- Old saves are unaffected (save games store building instances, not recipes);
+  migration 003 backfills existing DB content rows to one-element lists.
+
 ## 2026-06-12 — Capitalism 2–inspired default chains
 
 Default content is now five parallel industries instead of one chain, ordered
