@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { Application, Container, Graphics, Text } from 'pixi.js';
+import { Application, Container, FederatedPointerEvent, Graphics, Text } from 'pixi.js';
 import { chainComponents, chainLabel } from './chains';
-import type { GameContent, GameState } from './types';
+import type { BuildingDefinition, GameContent, GameState } from './types';
 
 const NODE_W = 160;
 const NODE_H = 96;
@@ -11,6 +11,12 @@ const ROW_TOP = 16;
 const ROW_LABEL_H = 26;
 const ROW_H = ROW_LABEL_H + NODE_H + 78; // label + node + edge/inventory room
 const DOTS_PER_EDGE = 4;
+const HEAP_ROWS = [5, 4, 3, 2, 1]; // pyramid, bottom row first (15 blocks max)
+const HEAP_MAX = 15;
+
+const COLOR_STARVED = 0xe5a44a;
+const COLOR_BOTTLENECK = 0xe0533f;
+const COLOR_LABEL = 0x9aa4b8;
 
 const SHAPE_RADIUS: Record<string, number> = {
   box: 3,
@@ -23,9 +29,14 @@ function hexToNum(hex: string, fallback = 0x1d2433): number {
   return m ? parseInt(m[1], 16) : fallback;
 }
 
+type NodeStatus = 'ok' | 'starved' | 'bottleneck';
+
 interface NodeView {
   countLabel: Text;
   progressFill: Graphics;
+  highlight: Graphics;
+  statusText: Text;
+  status: NodeStatus;
 }
 
 interface EdgeView {
@@ -36,6 +47,8 @@ interface EdgeView {
   segmentLengths: number[];
   totalLength: number;
   inventoryLabel: Text;
+  heap: Graphics[];
+  lastUnits: number;
 }
 
 function pointAlong(
@@ -86,19 +99,54 @@ function edgePath(from: NodePos, to: NodePos, underLane: number): NodePos[] {
   ];
 }
 
+/**
+ * Potential per-second supply and demand for every resource, from owned
+ * station counts and recipes. Used to find which station type is the real
+ * bottleneck (build more of it and the chain flows again).
+ */
+function flowRates(
+  buildings: BuildingDefinition[],
+  ownedCounts: Map<string, number>,
+): { supply: Map<string, number>; demand: Map<string, number> } {
+  const supply = new Map<string, number>();
+  const demand = new Map<string, number>();
+  for (const def of buildings) {
+    const count = ownedCounts.get(def.id) ?? 0;
+    if (count === 0 || def.productionTimeSeconds <= 0) continue;
+    const perSecond = count / def.productionTimeSeconds;
+    supply.set(
+      def.outputResourceId,
+      (supply.get(def.outputResourceId) ?? 0) + perSecond * def.outputAmount,
+    );
+    if (def.inputResourceId) {
+      demand.set(
+        def.inputResourceId,
+        (demand.get(def.inputResourceId) ?? 0) + perSecond * def.inputAmount,
+      );
+    }
+  }
+  return { supply, demand };
+}
+
 interface Props {
   content: GameContent;
   /** Latest polled state; read inside the render ticker without re-rendering React. */
   stateRef: React.RefObject<GameState | null>;
+  /** When set, station nodes become clickable (left or right) and report viewport coords. */
+  onStationMenu?: (definitionId: string, clientX: number, clientY: number) => void;
 }
 
 /**
  * Abstract node-graph view of the factory: one row per production chain, one
  * node per station styled by its admin-configured color/shape/icon, dots in
  * each product's color flowing along the edges, progress bars per node.
+ * Starved stations pulse amber; the station type whose capacity is the actual
+ * bottleneck pulses red; edge backlogs pile up as block heaps.
  */
-export function FactoryCanvas({ content, stateRef }: Props) {
+export function FactoryCanvas({ content, stateRef, onStationMenu }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef(onStationMenu);
+  menuRef.current = onStationMenu;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -199,13 +247,29 @@ export function FactoryCanvas({ content, stateRef }: Props) {
             const labelPoint = pointAlong(points, segmentLengths, totalLength, 0.5);
             const inventoryLabel = new Text({
               text: '',
-              style: { fill: 0x9aa4b8, fontSize: 12 },
+              style: { fill: COLOR_LABEL, fontSize: 12 },
             });
             inventoryLabel.anchor.set(0.5, 0);
             inventoryLabel.position.set(labelPoint.x, labelPoint.y + 8);
             scene.addChild(inventoryLabel);
 
             const dotColor = hexToNum(resource?.color ?? '', 0xf0b35c);
+
+            // Backlog heap: a pyramid of blocks just above the edge midpoint.
+            const heap: Graphics[] = [];
+            HEAP_ROWS.forEach((n, r) => {
+              for (let k = 0; k < n; k++) {
+                const sq = new Graphics().rect(0, 0, 6, 6).fill(dotColor);
+                sq.position.set(
+                  labelPoint.x + (k - (n - 1) / 2) * 7 - 3,
+                  labelPoint.y - 14 - r * 7,
+                );
+                sq.visible = false;
+                edgeLayer.addChild(sq);
+                heap.push(sq);
+              }
+            });
+
             const dots: Graphics[] = [];
             for (let d = 0; d < DOTS_PER_EDGE; d++) {
               const dot = new Graphics().circle(0, 0, 4).fill(dotColor);
@@ -221,6 +285,8 @@ export function FactoryCanvas({ content, stateRef }: Props) {
               segmentLengths,
               totalLength,
               inventoryLabel,
+              heap,
+              lastUnits: -1,
             });
           }
         }
@@ -228,12 +294,30 @@ export function FactoryCanvas({ content, stateRef }: Props) {
         const { x, y } = positions[i];
         const radius = SHAPE_RADIUS[def.shape] ?? SHAPE_RADIUS.box;
 
+        // Alert border, behind the node box; pulsed by the ticker.
+        const highlight = new Graphics()
+          .roundRect(-3, -3, NODE_W + 6, NODE_H + 6, radius + 4)
+          .stroke({ width: 3, color: COLOR_STARVED });
+        highlight.position.set(x, y);
+        highlight.visible = false;
+        scene.addChild(highlight);
+
         const box = new Graphics()
           .roundRect(0, 0, NODE_W, NODE_H, radius)
           .fill(hexToNum(def.color))
           .stroke({ width: 2, color: 0x3e4a61 });
         box.position.set(x, y);
         scene.addChild(box);
+
+        if (menuRef.current) {
+          box.eventMode = 'static';
+          box.cursor = 'pointer';
+          const openMenu = (e: FederatedPointerEvent) => {
+            menuRef.current?.(def.id, e.clientX, e.clientY);
+          };
+          box.on('rightclick', openMenu);
+          box.on('click', openMenu);
+        }
 
         const icon = new Text({ text: def.icon, style: { fontSize: 22 } });
         icon.anchor.set(1, 0);
@@ -254,6 +338,13 @@ export function FactoryCanvas({ content, stateRef }: Props) {
         countLabel.position.set(x + 14, y + 36);
         scene.addChild(countLabel);
 
+        const statusText = new Text({
+          text: '',
+          style: { fill: COLOR_STARVED, fontSize: 12, fontWeight: '600' },
+        });
+        statusText.position.set(x + 14, y + 55);
+        scene.addChild(statusText);
+
         const progressBg = new Graphics()
           .roundRect(0, 0, NODE_W - 28, 8, 4)
           .fill(0x10131a);
@@ -270,8 +361,28 @@ export function FactoryCanvas({ content, stateRef }: Props) {
         progressFill.scale.x = 0;
         scene.addChild(progressFill);
 
-        nodes.set(def.id, { countLabel, progressFill });
+        nodes.set(def.id, { countLabel, progressFill, highlight, statusText, status: 'ok' });
       });
+
+      const setStatus = (view: NodeView, status: NodeStatus, inputIcon: string) => {
+        if (view.status === status) return;
+        view.status = status;
+        if (status === 'starved') {
+          view.statusText.text = `⚠ starved — no ${inputIcon}`;
+          view.statusText.style.fill = COLOR_STARVED;
+          view.highlight.tint = 0xffffff; // drawn amber
+          view.highlight.visible = true;
+        } else if (status === 'bottleneck') {
+          view.statusText.text = '▲ add capacity';
+          view.statusText.style.fill = COLOR_BOTTLENECK;
+          // Highlight was drawn amber; tint shifts it red.
+          view.highlight.tint = 0xff7766;
+          view.highlight.visible = true;
+        } else {
+          view.statusText.text = '';
+          view.highlight.visible = false;
+        }
+      };
 
       let phase = 0;
       app.ticker.add((ticker) => {
@@ -279,6 +390,13 @@ export function FactoryCanvas({ content, stateRef }: Props) {
         if (!state) return;
 
         phase = (phase + ticker.deltaMS / 2500) % 1;
+        const pulse = 0.45 + 0.55 * Math.abs(Math.sin(phase * Math.PI * 4));
+
+        const ownedCounts = new Map<string, number>();
+        for (const b of state.buildings) {
+          ownedCounts.set(b.definitionId, (ownedCounts.get(b.definitionId) ?? 0) + 1);
+        }
+        const { supply, demand } = flowRates(content.buildings, ownedCounts);
 
         for (const def of content.buildings) {
           const view = nodes.get(def.id);
@@ -289,13 +407,46 @@ export function FactoryCanvas({ content, stateRef }: Props) {
             ? owned.reduce((sum, b) => sum + b.progress, 0) / owned.length
             : 0;
           view.progressFill.scale.x = avgProgress * (NODE_W - 28);
+
+          // Starved: owns instances that are idle waiting for input.
+          const starved =
+            def.inputResourceId !== null && owned.some((b) => !b.cycleActive);
+
+          // Bottleneck: building more of THIS station fixes a flow problem —
+          // either its output is in shortfall, or its input is piling up.
+          // A starved station is never the fix (its own input is short).
+          const outShort =
+            (demand.get(def.outputResourceId) ?? 0) >
+            (supply.get(def.outputResourceId) ?? 0) * 1.05 + 1e-6;
+          const inSurplus =
+            def.inputResourceId !== null &&
+            (supply.get(def.inputResourceId) ?? 0) >
+            ((demand.get(def.inputResourceId) ?? 0)) * 1.05 + 1e-6;
+          const bottleneck = !starved && (outShort || inSurplus);
+
+          const inputIcon = def.inputResourceId
+            ? resourceById.get(def.inputResourceId)?.icon ?? def.inputResourceId
+            : '';
+          setStatus(view, starved ? 'starved' : bottleneck ? 'bottleneck' : 'ok', inputIcon);
+          if (view.highlight.visible) {
+            view.highlight.alpha = pulse;
+          }
         }
 
         for (const edge of edges) {
           const units = state.inventory[edge.resourceId] ?? 0;
-          const resource = resourceById.get(edge.resourceId);
-          edge.inventoryLabel.text =
-            `${resource?.icon ?? ''} ${units} ${resource?.name ?? edge.resourceId}`;
+          if (units !== edge.lastUnits) {
+            edge.lastUnits = units;
+            const resource = resourceById.get(edge.resourceId);
+            edge.inventoryLabel.text =
+              `${resource?.icon ?? ''} ${units} ${resource?.name ?? edge.resourceId}`;
+            edge.inventoryLabel.style.fill =
+              units > 40 ? COLOR_BOTTLENECK : units > 15 ? COLOR_STARVED : COLOR_LABEL;
+            const shown = Math.min(units, HEAP_MAX);
+            edge.heap.forEach((sq, idx) => {
+              sq.visible = idx < shown;
+            });
+          }
           const active = units > 0;
           edge.dots.forEach((dot, d) => {
             dot.visible = active;
@@ -318,5 +469,11 @@ export function FactoryCanvas({ content, stateRef }: Props) {
     };
   }, [content, stateRef]);
 
-  return <div className="factory-canvas" ref={hostRef} />;
+  return (
+    <div
+      className="factory-canvas"
+      ref={hostRef}
+      onContextMenu={onStationMenu ? (e) => e.preventDefault() : undefined}
+    />
+  );
 }

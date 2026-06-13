@@ -50,11 +50,49 @@ h2 {
   border-radius: 12px;
 }
 
-.shop-chain h3 {
-  font-size: 13px;
-  margin: 18px 0 8px;
-  color: #9aa4b8;
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.station-menu {
+  position: fixed;
+  z-index: 11;
+  min-width: 230px;
+  background: #1d2433;
+  border: 1px solid #3e4a61;
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+
+.station-menu header {
   font-weight: 600;
+  margin-bottom: 4px;
+  display: block;
+}
+
+.station-menu header small {
+  color: #9aa4b8;
+  font-weight: 400;
+}
+
+.station-menu button {
+  width: 100%;
+  margin-top: 6px;
+  background: #2f7d4f;
+  border: 1px solid #2f7d4f;
+  border-radius: 6px;
+  color: inherit;
+  font: inherit;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.station-menu button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .shop-grid {

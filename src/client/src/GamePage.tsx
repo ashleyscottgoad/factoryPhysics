@@ -1,36 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchContent, fetchState, purchaseBuilding } from './api';
-import { chainComponents, chainLabel } from './chains';
 import { FactoryCanvas } from './FactoryCanvas';
-import type { BuildingDefinition, GameContent, GameState, ResourceDefinition } from './types';
+import type { GameContent, GameState } from './types';
 
 const POLL_MS = 1000;
 
 const money = (n: number) =>
   n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
-interface ChainGroup {
-  product: ResourceDefinition | undefined;
-  buildings: BuildingDefinition[];
-}
-
-function groupChains(content: GameContent): ChainGroup[] {
-  const components = chainComponents(content.buildings);
-  const resourceById = new Map(content.resources.map((r) => [r.id, r]));
-  const groups: BuildingDefinition[][] = [];
-  content.buildings.forEach((b, i) => {
-    (groups[components[i]] ??= []).push(b);
-  });
-  return groups.map((buildings) => ({
-    product: chainLabel(buildings, resourceById),
-    buildings,
-  }));
+interface MenuTarget {
+  definitionId: string;
+  x: number;
+  y: number;
 }
 
 export function GamePage() {
   const [content, setContent] = useState<GameContent | null>(null);
   const [state, setState] = useState<GameState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [menu, setMenu] = useState<MenuTarget | null>(null);
   const stateRef = useRef<GameState | null>(null);
   const contentVersionRef = useRef(0);
 
@@ -64,14 +52,30 @@ export function GamePage() {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenu(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menu]);
+
   const buy = async (definitionId: string) => {
     await purchaseBuilding(definitionId);
-    // Next poll picks up the new building; no optimistic update needed at 1s cadence.
+    // Next poll picks up the new building; menu stays open for repeat buys.
   };
 
   if (error && !state) {
     return <p className="error">API unreachable — is the backend running? ({error})</p>;
   }
+
+  const menuDef = menu && content
+    ? content.buildings.find((b) => b.id === menu.definitionId)
+    : undefined;
+  const menuOwned = menuDef && state
+    ? state.buildings.filter((b) => b.definitionId === menuDef.id).length
+    : 0;
 
   return (
     <>
@@ -82,40 +86,57 @@ export function GamePage() {
         </div>
       )}
 
-      {content && <FactoryCanvas content={content} stateRef={stateRef} />}
+      {content && (
+        <FactoryCanvas
+          content={content}
+          stateRef={stateRef}
+          onStationMenu={(definitionId, x, y) => setMenu({ definitionId, x, y })}
+        />
+      )}
 
-      {content && state && (
-        <section className="shop">
-          <h2>Build</h2>
-          {groupChains(content).map(({ product, buildings }, g) => (
-            <div key={g} className="shop-chain">
-              <h3>{product ? `${product.icon} ${product.name}` : `Chain ${g + 1}`}</h3>
-              <div className="shop-grid">
-                {buildings.map((def) => {
-                  const owned = state.buildings.filter((b) => b.definitionId === def.id).length;
-                  return (
-                    <button
-                      key={def.id}
-                      onClick={() => buy(def.id)}
-                      disabled={state.cash < def.cost}
-                    >
-                      <span className="shop-name">
-                        {def.icon} {def.name} <small>(x{owned})</small>
-                      </span>
-                      <span className="shop-detail">
-                        {def.inputResourceId
-                          ? `${def.inputAmount} ${def.inputResourceId} → ${def.outputAmount} ${def.outputResourceId}`
-                          : `→ ${def.outputAmount} ${def.outputResourceId}`}
-                        {' · '}{def.productionTimeSeconds}s
-                      </span>
-                      <span className="shop-cost">{money(def.cost)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </section>
+      <p className="hint">
+        Click or right-click a station to build more of it. Amber = starved of
+        input; red = build more of this station to fix the flow.
+      </p>
+
+      {menu && menuDef && state && (
+        <>
+          <div
+            className="menu-backdrop"
+            onClick={() => setMenu(null)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setMenu(null);
+            }}
+          />
+          <div
+            className="station-menu"
+            style={{
+              left: Math.min(menu.x, window.innerWidth - 260),
+              top: Math.min(menu.y, window.innerHeight - 170),
+            }}
+          >
+            <header>
+              {menuDef.icon} {menuDef.name} <small>x{menuOwned} built</small>
+            </header>
+            <p className="shop-detail">
+              {menuDef.inputResourceId
+                ? `${menuDef.inputAmount} ${menuDef.inputResourceId} → ${menuDef.outputAmount} ${menuDef.outputResourceId}`
+                : `→ ${menuDef.outputAmount} ${menuDef.outputResourceId}`}
+              {' · '}{menuDef.productionTimeSeconds}s per cycle
+            </p>
+            <button
+              className="primary"
+              disabled={state.cash < menuDef.cost}
+              onClick={() => buy(menuDef.id)}
+            >
+              Build — {money(menuDef.cost)}
+            </button>
+            {state.cash < menuDef.cost && (
+              <p className="shop-detail">Not enough cash ({money(state.cash)})</p>
+            )}
+          </div>
+        </>
       )}
 
       {error && <p className="error">{error}</p>}
