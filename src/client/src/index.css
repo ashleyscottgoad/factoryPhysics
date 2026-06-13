@@ -44,10 +44,15 @@ h2 {
 
 .factory-canvas {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .factory-canvas canvas {
   border-radius: 12px;
+  /* Scale the fixed-resolution canvas down to fit narrow screens; Pixi still
+     hit-tests taps correctly through the CSS transform. */
+  max-width: 100%;
+  height: auto;
 }
 
 .menu-backdrop {
@@ -290,4 +295,36 @@ nav a.active {
   display: flex;
   gap: 12px;
   margin-top: 24px;
+}
+
+/* --- Mobile --- */
+
+@media (max-width: 640px) {
+  .app {
+    padding: 12px;
+  }
+
+  h1 {
+    font-size: 19px;
+  }
+
+  .stats {
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  /* Anchor the build menu as a bottom sheet instead of at the tap point,
+     so it never lands off-screen or under a thumb. */
+  .station-menu {
+    left: 12px !important;
+    right: 12px;
+    top: auto !important;
+    bottom: 12px;
+    width: auto;
+    min-width: 0;
+  }
+
+  .station-menu button {
+    padding: 11px 10px;
+  }
 }

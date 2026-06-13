@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchContent, resetContent, resetGame, saveContent } from './api';
+import { clearLocalSave } from './save';
 import { FactoryCanvas } from './FactoryCanvas';
 import type {
   BuildingDefinition,
@@ -149,7 +150,9 @@ export function AdminPage() {
 
   const doResetGame = async () => {
     if (!confirm('Restart the factory? Cash, buildings, and inventory all reset.')) return;
-    await withResult(() => resetGame(adminKey), 'Factory restarted.');
+    // Clear the browser save too, or the local copy would just re-seed the cloud.
+    clearLocalSave();
+    await withResult(() => resetGame(adminKey), 'Factory restarted. Reload the game tab.');
   };
 
   if (!loaded && errors.length === 0) {

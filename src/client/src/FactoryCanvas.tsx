@@ -315,8 +315,10 @@ export function FactoryCanvas({ content, stateRef, onStationMenu }: Props) {
           const openMenu = (e: FederatedPointerEvent) => {
             menuRef.current?.(def.id, e.clientX, e.clientY);
           };
+          // pointertap covers mouse click and touch tap; rightclick keeps the
+          // desktop right-click affordance.
+          box.on('pointertap', openMenu);
           box.on('rightclick', openMenu);
-          box.on('click', openMenu);
         }
 
         const icon = new Text({ text: def.icon, style: { fontSize: 22 } });
