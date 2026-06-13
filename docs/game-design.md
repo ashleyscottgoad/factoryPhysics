@@ -148,7 +148,7 @@ Sonnet/Haiku. Plan-mode any milestone marked *(plan first)*.
 | # | Milestone | Nature | Suggested model |
 |---|---|---|---|
 | 1 | This design doc | Design/strategy | Opus 4.8 / Fable 5 (done) |
-| 2 | Engine: per-station **variability** (production-time variance) + reliability/uptime *(plan first)* | Core sim design + math | **Opus 4.8/Fable** to design, **Sonnet 4.6** to implement |
+| 2 | Engine: per-station **variability** (production-time variance) + reliability/uptime *(plan first)* | Core sim design + math | **Opus 4.8/Fable** to design, **Sonnet 4.6** to implement (done) |
 | 3 | **Constraint detection** + "moving bottleneck" spotlight in the UI | Algorithm on existing `flowRates`; clear spec | **Sonnet 4.6** |
 | 4 | **Protective WIP buffer** before the constraint (drum-buffer-rope) *(plan first)* | Systems design + feel | **Opus 4.8/Fable** to design, **Sonnet** to implement |
 | 5 | **Maintenance / OEE** (PM vs run-to-failure, machine health) | Mechanic + math | **Opus 4.8** design, **Sonnet** implement |

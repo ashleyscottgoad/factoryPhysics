@@ -39,6 +39,7 @@ function makePreviewState(content: GameContent): GameState {
       definitionId: b.id,
       cycleActive: true,
       progress: 0.6,
+      down: false,
     })),
   };
 }

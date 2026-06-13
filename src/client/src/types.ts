@@ -45,6 +45,8 @@ export interface BuildingState {
   definitionId: string;
   cycleActive: boolean;
   progress: number; // 0..1
+  /** True while the machine is broken down and awaiting repair. */
+  down: boolean;
 }
 
 export interface GameState {

@@ -186,6 +186,7 @@ Implementation note: Quality score should be a float (0.0–1.0) per production 
 | 2026-06 | Simulation moved client-side; server is now content + save store only | Idle game needs offline progress and tap-to-build without a network round-trip; readies a Capacitor mobile wrap. Engine ported to `src/client/src/engine.ts` (mirrors `SimulationEngine.cs`) |
 | 2026-06 | Saves are local + cloud; offline catch-up capped at 8h | localStorage gives instant/offline resilience, cloud (`PUT /api/save`) syncs across devices; load takes the newer copy and fast-forwards elapsed wall-clock time |
 | 2026-06 | v2 direction: Theory of Constraints + Factory Physics fusion; math in background, sensation in foreground; revenue deferred | The fun is diagnosing and fixing flow (moving constraint, buffers, variability, reliability), not building more. Full design + per-session model plan in `docs/game-design.md` |
+| 2026-06 | Milestone 2: per-station production-time variance (lognormal, CV knob) + passive breakdowns (MTBF/MTTR), as lean engine-side constants — no content/DB/admin changes | Variability is the v2 antagonist; lean tuning in `tuning.ts` gets the loop felt fast. Each building owns a seeded RNG stream (`rng.ts`) so offline catch-up is deterministic. Maintenance *levers* deferred to Milestone 5 |
 
 ---
 
