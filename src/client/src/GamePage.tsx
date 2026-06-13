@@ -163,12 +163,13 @@ export function GamePage() {
           stateRef={stateRef}
           onStationMenu={(definitionId, x, y) => setMenu({ definitionId, x, y })}
           showRatios={showRatios}
+          pannable
         />
       )}
 
       <p className="hint">
-        Tap a station to build more of it. Amber = starved of input; red = build
-        more of this station to fix the flow.
+        Tap a station to build more of it; drag to pan, pinch or scroll to zoom.
+        Amber = starved of input; red = build more of this station to fix the flow.
         {showRatios && ' ⚖ N = the balanced count for max throughput.'}
       </p>
 
