@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { fetchContent } from './api';
 import { tick, toGameState, tryPurchaseBuilding, type EngineState } from './engine';
 import { loadInitialState, saveBoth, writeLocalSave } from './save';
+import { getShowOptimalRatios } from './settings';
 import { FactoryCanvas } from './FactoryCanvas';
 import type { GameContent, GameState } from './types';
 
@@ -23,6 +24,9 @@ export function GamePage() {
   const [view, setView] = useState<GameState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuTarget | null>(null);
+  // Read once on mount: the admin toggle lives on a separate route, so this
+  // component remounts (and re-reads) whenever you switch back to the factory.
+  const [showRatios] = useState(getShowOptimalRatios);
 
   // The simulation now runs in the browser; the server only stores saves.
   const engineRef = useRef<EngineState | null>(null);
@@ -158,12 +162,14 @@ export function GamePage() {
           content={content}
           stateRef={stateRef}
           onStationMenu={(definitionId, x, y) => setMenu({ definitionId, x, y })}
+          showRatios={showRatios}
         />
       )}
 
       <p className="hint">
         Tap a station to build more of it. Amber = starved of input; red = build
         more of this station to fix the flow.
+        {showRatios && ' ⚖ N = the balanced count for max throughput.'}
       </p>
 
       {menu && menuDef && view && (

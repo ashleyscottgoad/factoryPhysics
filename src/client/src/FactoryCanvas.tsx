@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Application, Container, FederatedPointerEvent, Graphics, Text } from 'pixi.js';
-import { chainComponents, chainLabel } from './chains';
+import { chainComponents, chainLabel, optimalRatios } from './chains';
 import type { BuildingDefinition, GameContent, GameState } from './types';
 
 const NODE_W = 160;
@@ -134,6 +134,8 @@ interface Props {
   stateRef: React.RefObject<GameState | null>;
   /** When set, station nodes become clickable (left or right) and report viewport coords. */
   onStationMenu?: (definitionId: string, clientX: number, clientY: number) => void;
+  /** Show each station's balanced-ratio target (⚖ N) for max throughput. */
+  showRatios?: boolean;
 }
 
 /**
@@ -143,7 +145,7 @@ interface Props {
  * Starved stations pulse amber; the station type whose capacity is the actual
  * bottleneck pulses red; edge backlogs pile up as block heaps.
  */
-export function FactoryCanvas({ content, stateRef, onStationMenu }: Props) {
+export function FactoryCanvas({ content, stateRef, onStationMenu, showRatios }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef(onStationMenu);
   menuRef.current = onStationMenu;
@@ -153,6 +155,7 @@ export function FactoryCanvas({ content, stateRef, onStationMenu }: Props) {
     if (!host) return;
 
     const components = chainComponents(content.buildings);
+    const ratios = showRatios ? optimalRatios(content.buildings) : null;
     const rowCount = components.length ? Math.max(...components) + 1 : 0;
 
     // Per-building grid position: row = chain, column = order within chain.
@@ -340,6 +343,18 @@ export function FactoryCanvas({ content, stateRef, onStationMenu }: Props) {
         countLabel.position.set(x + 14, y + 36);
         scene.addChild(countLabel);
 
+        // Balanced-ratio target: how many of this station to keep the chain fed.
+        const ideal = ratios?.get(def.id);
+        if (ideal !== undefined) {
+          const ratioLabel = new Text({
+            text: `⚖ ${ideal}`,
+            style: { fill: COLOR_LABEL, fontSize: 13, fontWeight: '600' },
+          });
+          ratioLabel.anchor.set(1, 0);
+          ratioLabel.position.set(x + NODE_W - 12, y + 36);
+          scene.addChild(ratioLabel);
+        }
+
         const statusText = new Text({
           text: '',
           style: { fill: COLOR_STARVED, fontSize: 12, fontWeight: '600' },
@@ -469,7 +484,7 @@ export function FactoryCanvas({ content, stateRef, onStationMenu }: Props) {
         app.destroy(true, { children: true });
       }
     };
-  }, [content, stateRef]);
+  }, [content, stateRef, showRatios]);
 
   return (
     <div
