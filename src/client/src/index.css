@@ -55,6 +55,24 @@ h2 {
   height: auto;
 }
 
+/* Pannable (live game): the canvas is a fixed viewport with its own camera, so
+   don't CSS-scale it, and let it own touch gestures instead of the page. */
+.factory-canvas.pannable {
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.factory-canvas.pannable canvas {
+  max-width: 100%;
+  height: auto;
+  touch-action: none;
+  cursor: grab;
+}
+
+.factory-canvas.pannable canvas:active {
+  cursor: grabbing;
+}
+
 .menu-backdrop {
   position: fixed;
   inset: 0;

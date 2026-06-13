@@ -136,7 +136,11 @@ interface Props {
   onStationMenu?: (definitionId: string, clientX: number, clientY: number) => void;
   /** Show each station's balanced-ratio target (⚖ N) for max throughput. */
   showRatios?: boolean;
+  /** Make the view a draggable/pinch-zoomable camera (for the live game on phones). */
+  pannable?: boolean;
 }
+
+const clamp = (n: number, lo: number, hi: number) => Math.min(Math.max(n, lo), hi);
 
 /**
  * Abstract node-graph view of the factory: one row per production chain, one
@@ -145,7 +149,7 @@ interface Props {
  * Starved stations pulse amber; the station type whose capacity is the actual
  * bottleneck pulses red; edge backlogs pile up as block heaps.
  */
-export function FactoryCanvas({ content, stateRef, onStationMenu, showRatios }: Props) {
+export function FactoryCanvas({ content, stateRef, onStationMenu, showRatios, pannable }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef(onStationMenu);
   menuRef.current = onStationMenu;
@@ -170,18 +174,31 @@ export function FactoryCanvas({ content, stateRef, onStationMenu, showRatios }: 
     });
 
     const maxCols = Math.max(1, ...colCounters);
-    const width = Math.max(960, COL_X0 * 2 + (maxCols - 1) * COL_GAP + NODE_W);
-    const height = Math.max(340, ROW_TOP + rowCount * ROW_H);
+    const sceneW = Math.max(960, COL_X0 * 2 + (maxCols - 1) * COL_GAP + NODE_W);
+    const sceneH = Math.max(340, ROW_TOP + rowCount * ROW_H);
+
+    // Pannable (live game): the canvas is a viewport into a larger scene the
+    // player drags/pinches around. Otherwise (admin preview) it's the full
+    // scene scaled to fit by CSS, as before.
+    const viewW = pannable ? Math.max(320, Math.floor(host.clientWidth || sceneW)) : sceneW;
+    const viewH = pannable
+      ? Math.max(360, Math.min(sceneH, Math.round((window.innerHeight || 720) * 0.68)))
+      : sceneH;
 
     let cancelled = false;
     const app = new Application();
+    // Set true by a drag/pinch so the gesture isn't also read as a tap-to-build.
+    let didPan = false;
+    let detachCamera = () => {};
 
     const setup = async () => {
       await app.init({
-        width,
-        height,
+        width: viewW,
+        height: viewH,
         backgroundColor: 0x10131a,
         antialias: true,
+        resolution: pannable ? window.devicePixelRatio || 1 : 1,
+        autoDensity: pannable,
       });
       if (cancelled) {
         app.destroy(true, { children: true });
@@ -316,6 +333,7 @@ export function FactoryCanvas({ content, stateRef, onStationMenu, showRatios }: 
           box.eventMode = 'static';
           box.cursor = 'pointer';
           const openMenu = (e: FederatedPointerEvent) => {
+            if (didPan) return; // the gesture was a camera drag/pinch, not a tap
             menuRef.current?.(def.id, e.clientX, e.clientY);
           };
           // pointertap covers mouse click and touch tap; rightclick keeps the
@@ -401,6 +419,122 @@ export function FactoryCanvas({ content, stateRef, onStationMenu, showRatios }: 
         }
       };
 
+      // --- Camera: drag to pan, pinch / wheel to zoom (live game only) ---
+      if (pannable) {
+        const camera = { x: 0, y: 0, scale: 1 };
+        let minScale = 1;
+        const maxScale = 2.5;
+
+        const apply = () => {
+          camera.scale = clamp(camera.scale, minScale, maxScale);
+          scene.scale.set(camera.scale);
+          scene.position.set(camera.x, camera.y);
+        };
+
+        // Contain the whole scene and center it (don't upscale past 1:1).
+        const fit = () => {
+          const fitScale = Math.min(app.screen.width / sceneW, app.screen.height / sceneH, 1);
+          minScale = fitScale * 0.6; // allow zooming out a little past the fit
+          camera.scale = fitScale;
+          camera.x = (app.screen.width - sceneW * fitScale) / 2;
+          camera.y = Math.max(0, (app.screen.height - sceneH * fitScale) / 2);
+          apply();
+        };
+        fit();
+
+        // Screen → canvas-logical coords, robust to any CSS scaling of the canvas.
+        const toLocal = (clientX: number, clientY: number) => {
+          const r = app.canvas.getBoundingClientRect();
+          return {
+            x: ((clientX - r.left) / r.width) * app.screen.width,
+            y: ((clientY - r.top) / r.height) * app.screen.height,
+          };
+        };
+        const zoomAround = (pt: { x: number; y: number }, nextScale: number) => {
+          const s = clamp(nextScale, minScale, maxScale);
+          const worldX = (pt.x - camera.x) / camera.scale;
+          const worldY = (pt.y - camera.y) / camera.scale;
+          camera.scale = s;
+          camera.x = pt.x - worldX * s;
+          camera.y = pt.y - worldY * s;
+          apply();
+        };
+
+        const pointers = new Map<number, { x: number; y: number }>();
+        let moveAccum = 0;
+        let pinchDist = 0;
+        let pinchScale = 1;
+
+        const onDown = (e: PointerEvent) => {
+          app.canvas.setPointerCapture?.(e.pointerId);
+          pointers.set(e.pointerId, toLocal(e.clientX, e.clientY));
+          if (pointers.size === 1) {
+            moveAccum = 0;
+            didPan = false;
+          } else if (pointers.size === 2) {
+            const [a, b] = [...pointers.values()];
+            pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+            pinchScale = camera.scale;
+          }
+        };
+        const onMove = (e: PointerEvent) => {
+          if (!pointers.has(e.pointerId)) return;
+          const prev = pointers.get(e.pointerId)!;
+          const cur = toLocal(e.clientX, e.clientY);
+          pointers.set(e.pointerId, cur);
+
+          if (pointers.size >= 2) {
+            const [a, b] = [...pointers.values()];
+            const dist = Math.hypot(a.x - b.x, a.y - b.y);
+            if (pinchDist > 0) {
+              const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+              zoomAround(mid, pinchScale * (dist / pinchDist));
+            }
+            didPan = true;
+          } else {
+            const dx = cur.x - prev.x;
+            const dy = cur.y - prev.y;
+            camera.x += dx;
+            camera.y += dy;
+            moveAccum += Math.hypot(dx, dy);
+            if (moveAccum > 8) didPan = true; // past this, it's a pan not a tap
+            apply();
+          }
+        };
+        const onUp = (e: PointerEvent) => {
+          pointers.delete(e.pointerId);
+          if (pointers.size < 2) pinchDist = 0;
+        };
+        const onWheel = (e: WheelEvent) => {
+          e.preventDefault();
+          zoomAround(toLocal(e.clientX, e.clientY), camera.scale * Math.exp(-e.deltaY * 0.0015));
+        };
+        const onResize = () => {
+          const w = Math.max(320, Math.floor(host.clientWidth || sceneW));
+          if (Math.abs(w - app.screen.width) < 2) return;
+          app.renderer.resize(w, viewH);
+          fit();
+        };
+
+        const canvas = app.canvas;
+        canvas.addEventListener('pointerdown', onDown);
+        canvas.addEventListener('pointermove', onMove);
+        canvas.addEventListener('pointerup', onUp);
+        canvas.addEventListener('pointercancel', onUp);
+        canvas.addEventListener('wheel', onWheel, { passive: false });
+        const ro = new ResizeObserver(onResize);
+        ro.observe(host);
+
+        detachCamera = () => {
+          canvas.removeEventListener('pointerdown', onDown);
+          canvas.removeEventListener('pointermove', onMove);
+          canvas.removeEventListener('pointerup', onUp);
+          canvas.removeEventListener('pointercancel', onUp);
+          canvas.removeEventListener('wheel', onWheel);
+          ro.disconnect();
+        };
+      }
+
       let phase = 0;
       app.ticker.add((ticker) => {
         const state = stateRef.current;
@@ -480,15 +614,16 @@ export function FactoryCanvas({ content, stateRef, onStationMenu, showRatios }: 
 
     return () => {
       cancelled = true;
+      detachCamera();
       if (app.renderer) {
         app.destroy(true, { children: true });
       }
     };
-  }, [content, stateRef, showRatios]);
+  }, [content, stateRef, showRatios, pannable]);
 
   return (
     <div
-      className="factory-canvas"
+      className={pannable ? 'factory-canvas pannable' : 'factory-canvas'}
       ref={hostRef}
       onContextMenu={onStationMenu ? (e) => e.preventDefault() : undefined}
     />
