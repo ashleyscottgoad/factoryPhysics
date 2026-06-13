@@ -183,12 +183,15 @@ Implementation note: Quality score should be a float (0.0–1.0) per production 
 | 2026-06 | Content is data-driven: admin page edits recipes + graphics, stored in Resources/BuildingDefinitions tables | The v2 relational model arrived early; code defaults seed the DB on first run |
 | 2026-06 | Admin protected by a shared key (`AdminKey` app setting → `X-Admin-Key` header) | Public URL needs at least a crude lock; real auth deferred |
 | 2026-06 | Server holds live game state in memory; periodic + on-demand save to SQL | Idle games need cheap ticks; SQL round-trip per tick is unnecessary |
+| 2026-06 | Simulation moved client-side; server is now content + save store only | Idle game needs offline progress and tap-to-build without a network round-trip; readies a Capacitor mobile wrap. Engine ported to `src/client/src/engine.ts` (mirrors `SimulationEngine.cs`) |
+| 2026-06 | Saves are local + cloud; offline catch-up capped at 8h | localStorage gives instant/offline resilience, cloud (`PUT /api/save`) syncs across devices; load takes the newer copy and fast-forwards elapsed wall-clock time |
 
 ---
 
 ## Open Questions (To Decide)
 
-- [ ] Turn-based (player clicks advance time) vs fully idle (runs automatically)? *(v1 skeleton is fully idle — server ticks once per second)*
+- [x] Turn-based vs fully idle? *(Fully idle. The browser ticks ~4×/second; offline time is simulated on load, capped at 8h)*
+- [x] Offline progress: simulate elapsed time on load, or pause while away? *(Simulate on load from the save's wall-clock timestamp, capped at 8h)*
 - [ ] Top-down factory floor view vs abstract node graph view? *(v1 skeleton uses abstract node graph)*
 - [ ] Single production chain to start, or let player build multiple parallel chains?
 - [ ] How granular is inventory? (units, batches, continuous flow?) *(v1 skeleton uses whole units)*

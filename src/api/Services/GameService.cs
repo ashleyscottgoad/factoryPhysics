@@ -1,70 +1,36 @@
-using System.Text.Json;
 using FactoryPhysics.Api.Data;
-using FactoryPhysics.Simulation;
 using Microsoft.EntityFrameworkCore;
 
 namespace FactoryPhysics.Api.Services;
 
 /// <summary>
-/// Holds the live in-memory factory state and mediates all access to it.
-/// v1 is single-player: one factory under a fixed player id. State is ticked
-/// by <see cref="TickHostedService"/> and saved to SQL periodically and on demand.
+/// Save store for the client-run simulation. The browser owns the live game
+/// state and ticks it locally; the server just persists the opaque save JSON
+/// the client posts. v1 is single-player: one save under a fixed player id.
 /// </summary>
-public sealed class GameService(
-    IServiceScopeFactory scopeFactory,
-    ContentService content,
-    ILogger<GameService> logger)
+public sealed class GameService(IServiceScopeFactory scopeFactory, ILogger<GameService> logger)
 {
     public const string DefaultPlayerId = "default";
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
-
-    private readonly object _gate = new();
-    private FactoryState _state = GameContent.NewFactory(content.Catalog);
-
-    /// <summary>Run an action against the live state under the lock and return its result.</summary>
-    public T WithState<T>(Func<FactoryState, T> action)
+    /// <summary>The stored save JSON and when it was written, or null if none.</summary>
+    public async Task<(string Json, DateTime UpdatedAtUtc)?> LoadRawAsync(
+        CancellationToken cancellationToken = default)
     {
-        lock (_gate)
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetService<FactoryDbContext>();
+        if (db is null)
         {
-            return action(_state);
+            return null;
         }
+
+        var save = await db.SaveGames.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.PlayerId == DefaultPlayerId, cancellationToken);
+        return save is null ? null : (save.StateJson, save.UpdatedAtUtc);
     }
 
-    public void Tick(double deltaSeconds)
+    /// <summary>Upsert the client's save JSON. No-op (with a warning) if no database is configured.</summary>
+    public async Task SaveRawAsync(string json, CancellationToken cancellationToken = default)
     {
-        lock (_gate)
-        {
-            SimulationEngine.Tick(_state, deltaSeconds, content.Catalog);
-        }
-    }
-
-    public bool TryPurchaseBuilding(string definitionId)
-    {
-        lock (_gate)
-        {
-            return SimulationEngine.TryPurchaseBuilding(_state, definitionId, content.Catalog);
-        }
-    }
-
-    /// <summary>Throw away the current factory and start a new game.</summary>
-    public void ResetGame()
-    {
-        lock (_gate)
-        {
-            _state = GameContent.NewFactory(content.Catalog);
-        }
-    }
-
-    /// <summary>Persist the current state. No-op (with a warning) if no database is configured.</summary>
-    public async Task SaveAsync(CancellationToken cancellationToken = default)
-    {
-        string json;
-        lock (_gate)
-        {
-            json = JsonSerializer.Serialize(_state, JsonOptions);
-        }
-
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetService<FactoryDbContext>();
         if (db is null)
@@ -85,34 +51,21 @@ public sealed class GameService(
         await db.SaveChangesAsync(cancellationToken);
     }
 
-    /// <summary>Load saved state if one exists; otherwise keep the current state.</summary>
-    public async Task<bool> LoadAsync(CancellationToken cancellationToken = default)
+    /// <summary>Delete the save so the client re-seeds a fresh factory.</summary>
+    public async Task ResetGameAsync(CancellationToken cancellationToken = default)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetService<FactoryDbContext>();
         if (db is null)
         {
-            return false;
+            return;
         }
 
-        var save = await db.SaveGames.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.PlayerId == DefaultPlayerId, cancellationToken);
-        if (save is null)
+        var save = await db.SaveGames.FindAsync([DefaultPlayerId], cancellationToken);
+        if (save is not null)
         {
-            return false;
+            db.SaveGames.Remove(save);
+            await db.SaveChangesAsync(cancellationToken);
         }
-
-        var loaded = JsonSerializer.Deserialize<FactoryState>(save.StateJson, JsonOptions);
-        if (loaded is null)
-        {
-            return false;
-        }
-
-        lock (_gate)
-        {
-            _state = loaded;
-        }
-
-        return true;
     }
 }

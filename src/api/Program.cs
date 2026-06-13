@@ -16,7 +16,6 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 
 builder.Services.AddSingleton<ContentService>();
 builder.Services.AddSingleton<GameService>();
-builder.Services.AddHostedService<TickHostedService>();
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
     ?? ["http://localhost:5173"];
@@ -25,6 +24,17 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod()));
 
 var app = builder.Build();
+
+// The simulation runs in the browser now; the server still owns content, so
+// seed/load it once at startup (the tick service used to do this).
+try
+{
+    await app.Services.GetRequiredService<ContentService>().InitializeAsync();
+}
+catch (Exception ex)
+{
+    app.Logger.LogError(ex, "Failed to load content from database; using defaults");
+}
 
 app.UseCors();
 
@@ -39,41 +49,18 @@ app.MapGet("/api/content", (ContentService content) => Results.Ok(new
     buildings = content.Catalog.Buildings,
 }));
 
-// Live factory state snapshot, polled by the client.
-app.MapGet("/api/state", (GameService game, ContentService content) =>
+// Cloud save: the client owns the live state and posts its save JSON here.
+app.MapGet("/api/save", async (GameService game, CancellationToken ct) =>
 {
-    var catalog = content.Catalog;
-    return Results.Ok(game.WithState(state => new
-    {
-        contentVersion = content.Version,
-        cash = state.Cash,
-        lifetimeRevenue = state.LifetimeRevenue,
-        elapsedSeconds = state.ElapsedSeconds,
-        // Copied: the snapshot is serialized after the state lock is released.
-        inventory = new Dictionary<string, int>(state.Inventory),
-        buildings = state.Buildings.Select(b =>
-        {
-            var def = catalog.FindBuilding(b.DefinitionId);
-            return new
-            {
-                definitionId = b.DefinitionId,
-                cycleActive = b.CycleActive,
-                progress = def is { ProductionTimeSeconds: > 0 }
-                    ? Math.Clamp(b.ProgressSeconds / def.ProductionTimeSeconds, 0, 1)
-                    : 0,
-            };
-        }).ToList(),
-    }));
+    var saved = await game.LoadRawAsync(ct);
+    return saved is null
+        ? Results.NoContent()
+        : Results.Ok(new { stateJson = saved.Value.Json, savedAtUtc = saved.Value.UpdatedAtUtc });
 });
 
-app.MapPost("/api/buildings/{definitionId}", (string definitionId, GameService game) =>
-    game.TryPurchaseBuilding(definitionId)
-        ? Results.Ok()
-        : Results.BadRequest(new { error = "Unknown building or insufficient cash" }));
-
-app.MapPost("/api/save", async (GameService game, CancellationToken ct) =>
+app.MapPut("/api/save", async (SaveRequest request, GameService game, CancellationToken ct) =>
 {
-    await game.SaveAsync(ct);
+    await game.SaveRawAsync(request.StateJson, ct);
     return Results.Ok();
 });
 
@@ -123,8 +110,7 @@ admin.MapPost("/content/reset", async (ContentService content, CancellationToken
 
 admin.MapPost("/game/reset", async (GameService game, CancellationToken ct) =>
 {
-    game.ResetGame();
-    await game.SaveAsync(ct);
+    await game.ResetGameAsync(ct);
     return Results.Ok();
 });
 
@@ -133,3 +119,5 @@ app.Run();
 internal sealed record ContentUpdateRequest(
     List<ResourceDefinition> Resources,
     List<BuildingDefinition> Buildings);
+
+internal sealed record SaveRequest(string StateJson);

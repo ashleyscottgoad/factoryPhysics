@@ -1,4 +1,5 @@
-import type { BuildingDefinition, GameContent, GameState, ResourceDefinition } from './types';
+import type { BuildingDefinition, GameContent, ResourceDefinition } from './types';
+import type { StoredSave } from './save';
 
 // Same-origin '/api' in dev (Vite proxy). In production, set VITE_API_BASE_URL
 // to the App Service URL at build time.
@@ -14,11 +15,35 @@ async function getJson<T>(path: string): Promise<T> {
 
 export const fetchContent = () => getJson<GameContent>('/api/content');
 
-export const fetchState = () => getJson<GameState>('/api/state');
+/** Read the cloud save, or null if none exists / the server is unreachable. */
+export async function loadCloudSave(): Promise<StoredSave | null> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/api/save`);
+  } catch {
+    return null; // offline: fall back to the local save
+  }
+  if (res.status === 204 || !res.ok) return null;
+  const body = (await res.json()) as { stateJson: string };
+  try {
+    return JSON.parse(body.stateJson) as StoredSave;
+  } catch {
+    return null;
+  }
+}
 
-export async function purchaseBuilding(definitionId: string): Promise<boolean> {
-  const res = await fetch(`${BASE}/api/buildings/${definitionId}`, { method: 'POST' });
-  return res.ok;
+/** Push the full save to the cloud. Best-effort; swallows transient failures. */
+export async function pushCloudSave(save: StoredSave): Promise<boolean> {
+  try {
+    const res = await fetch(`${BASE}/api/save`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stateJson: JSON.stringify(save) }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 // --- Admin (X-Admin-Key checked server-side) ---

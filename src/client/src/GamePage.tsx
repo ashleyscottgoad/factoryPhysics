@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { fetchContent, fetchState, purchaseBuilding } from './api';
+import { fetchContent } from './api';
+import { tick, toGameState, tryPurchaseBuilding, type EngineState } from './engine';
+import { loadInitialState, saveBoth, writeLocalSave } from './save';
 import { FactoryCanvas } from './FactoryCanvas';
 import type { GameContent, GameState } from './types';
 
-const POLL_MS = 1000;
+const TICK_MS = 250;
+const LOCAL_SAVE_MS = 5_000;
+const CLOUD_SAVE_MS = 30_000;
 
 const money = (n: number) =>
   n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -16,40 +20,96 @@ interface MenuTarget {
 
 export function GamePage() {
   const [content, setContent] = useState<GameContent | null>(null);
-  const [state, setState] = useState<GameState | null>(null);
+  const [view, setView] = useState<GameState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuTarget | null>(null);
-  const stateRef = useRef<GameState | null>(null);
-  const contentVersionRef = useRef(0);
 
+  // The simulation now runs in the browser; the server only stores saves.
+  const engineRef = useRef<EngineState | null>(null);
+  const contentRef = useRef<GameContent | null>(null);
+  const stateRef = useRef<GameState | null>(null); // canvas-facing snapshot
+
+  // Boot: load content, seed state (newest of local/cloud save + offline
+  // catch-up), then run the tick loop and autosaves locally.
   useEffect(() => {
-    const loadContent = () =>
-      fetchContent()
-        .then((c) => {
-          contentVersionRef.current = c.version;
-          setContent(c);
-        })
-        .catch((e) => setError(String(e)));
+    let cancelled = false;
+    let lastMs = performance.now();
 
-    void loadContent();
+    const publish = () => {
+      const engine = engineRef.current;
+      const c = contentRef.current;
+      if (!engine || !c) return;
+      const gs = toGameState(engine, c);
+      stateRef.current = gs;
+      setView(gs);
+    };
 
-    const poll = async () => {
+    const boot = async () => {
       try {
-        const s = await fetchState();
-        stateRef.current = s;
-        setState(s);
+        const c = await fetchContent();
+        if (cancelled) return;
+        contentRef.current = c;
+        setContent(c);
+
+        engineRef.current = await loadInitialState(c);
+        if (cancelled) return;
+        publish();
         setError(null);
-        // An admin edited recipes/graphics since our last content fetch.
-        if (s.contentVersion !== contentVersionRef.current) {
-          void loadContent();
-        }
       } catch (e) {
         setError(String(e));
       }
     };
-    void poll();
-    const id = setInterval(poll, POLL_MS);
-    return () => clearInterval(id);
+    void boot();
+
+    const tickId = setInterval(() => {
+      const engine = engineRef.current;
+      const c = contentRef.current;
+      const now = performance.now();
+      const dt = (now - lastMs) / 1000;
+      lastMs = now;
+      if (engine && c) {
+        tick(engine, dt, c);
+        publish();
+      }
+    }, TICK_MS);
+
+    const localId = setInterval(() => {
+      if (engineRef.current) writeLocalSave(engineRef.current);
+    }, LOCAL_SAVE_MS);
+    const cloudId = setInterval(() => {
+      if (engineRef.current) saveBoth(engineRef.current);
+    }, CLOUD_SAVE_MS);
+
+    const flush = () => {
+      if (engineRef.current) saveBoth(engineRef.current);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+      else void refreshContent(); // admin may have edited while we were away
+    };
+    const refreshContent = async () => {
+      try {
+        const c = await fetchContent();
+        contentRef.current = c;
+        setContent(c);
+      } catch {
+        // keep the content we have
+      }
+    };
+    window.addEventListener('beforeunload', flush);
+    window.addEventListener('focus', refreshContent);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      cancelled = true;
+      clearInterval(tickId);
+      clearInterval(localId);
+      clearInterval(cloudId);
+      window.removeEventListener('beforeunload', flush);
+      window.removeEventListener('focus', refreshContent);
+      document.removeEventListener('visibilitychange', onVisibility);
+      flush();
+    };
   }, []);
 
   useEffect(() => {
@@ -61,28 +121,35 @@ export function GamePage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [menu]);
 
-  const buy = async (definitionId: string) => {
-    await purchaseBuilding(definitionId);
-    // Next poll picks up the new building; menu stays open for repeat buys.
+  const buy = (definitionId: string) => {
+    const engine = engineRef.current;
+    const c = contentRef.current;
+    if (!engine || !c) return;
+    if (tryPurchaseBuilding(engine, definitionId, c)) {
+      const gs = toGameState(engine, c);
+      stateRef.current = gs;
+      setView(gs);
+      writeLocalSave(engine); // a purchase is worth persisting immediately
+    }
   };
 
-  if (error && !state) {
-    return <p className="error">API unreachable — is the backend running? ({error})</p>;
+  if (error && !view) {
+    return <p className="error">Couldn't load the game ({error})</p>;
   }
 
   const menuDef = menu && content
     ? content.buildings.find((b) => b.id === menu.definitionId)
     : undefined;
-  const menuOwned = menuDef && state
-    ? state.buildings.filter((b) => b.definitionId === menuDef.id).length
+  const menuOwned = menuDef && view
+    ? view.buildings.filter((b) => b.definitionId === menuDef.id).length
     : 0;
 
   return (
     <>
-      {state && (
+      {view && (
         <div className="stats">
-          <span className="stat">Cash: <strong>{money(state.cash)}</strong></span>
-          <span className="stat">Lifetime revenue: <strong>{money(state.lifetimeRevenue)}</strong></span>
+          <span className="stat">Cash: <strong>{money(view.cash)}</strong></span>
+          <span className="stat">Lifetime revenue: <strong>{money(view.lifetimeRevenue)}</strong></span>
         </div>
       )}
 
@@ -99,7 +166,7 @@ export function GamePage() {
         more of this station to fix the flow.
       </p>
 
-      {menu && menuDef && state && (
+      {menu && menuDef && view && (
         <>
           <div
             className="menu-backdrop"
@@ -127,13 +194,13 @@ export function GamePage() {
             </p>
             <button
               className="primary"
-              disabled={state.cash < menuDef.cost}
+              disabled={view.cash < menuDef.cost}
               onClick={() => buy(menuDef.id)}
             >
               Build — {money(menuDef.cost)}
             </button>
-            {state.cash < menuDef.cost && (
-              <p className="shop-detail">Not enough cash ({money(state.cash)})</p>
+            {view.cash < menuDef.cost && (
+              <p className="shop-detail">Not enough cash ({money(view.cash)})</p>
             )}
           </div>
         </>
