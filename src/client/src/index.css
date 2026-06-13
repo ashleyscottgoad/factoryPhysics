@@ -297,6 +297,20 @@ nav a.active {
   margin-top: 24px;
 }
 
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.toggle input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
 /* --- Mobile --- */
 
 @media (max-width: 640px) {

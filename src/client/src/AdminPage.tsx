@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchContent, resetContent, resetGame, saveContent } from './api';
 import { clearLocalSave } from './save';
+import { getShowOptimalRatios, setShowOptimalRatios } from './settings';
 import { FactoryCanvas } from './FactoryCanvas';
 import type {
   BuildingDefinition,
@@ -49,6 +50,12 @@ export function AdminPage() {
   const [errors, setErrors] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [showRatios, setShowRatios] = useState(getShowOptimalRatios);
+
+  const toggleRatios = (on: boolean) => {
+    setShowRatios(on);
+    setShowOptimalRatios(on);
+  };
 
   useEffect(() => {
     fetchContent()
@@ -293,12 +300,29 @@ export function AdminPage() {
       </section>
 
       <section>
+        <h2>Display</h2>
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={showRatios}
+            onChange={(e) => toggleRatios(e.target.checked)}
+          />
+          Show optimal ratios (⚖) on the factory view
+        </label>
+        <p className="hint">
+          Marks each station with the balanced count that keeps its chain fed for
+          maximum throughput (e.g. 4 : 3 : 2). Applies on your device.
+        </p>
+      </section>
+
+      <section>
         <h2>Preview</h2>
         {previewContent && (
           <FactoryCanvas
-            key={JSON.stringify(previewContent)}
+            key={JSON.stringify(previewContent) + showRatios}
             content={previewContent}
             stateRef={previewStateRef}
+            showRatios={showRatios}
           />
         )}
       </section>
