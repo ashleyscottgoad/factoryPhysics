@@ -95,8 +95,8 @@ export function GamePage() {
       )}
 
       <p className="hint">
-        Click or right-click a station to build more of it. Amber = starved of
-        input; red = build more of this station to fix the flow.
+        Tap a station to build more of it. Amber = starved of input; red = build
+        more of this station to fix the flow.
       </p>
 
       {menu && menuDef && state && (
